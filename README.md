@@ -6,13 +6,26 @@
 
 **Know which of your coding agents needs you, without leaving tmux.**
 
+![herd mode: one key shows every agent, the ones that need you first](docs/demo.gif)
+
 You run Claude Code in one pane, Codex in another, pi in a third. One is
 waiting for permission, one finished ten minutes ago, one is still working, and
 you only find out by flipping through panes. tmux-agent-herd gives tmux
 agent awareness: every agent's state in your status line, a notification when
 one needs you, and **one key** that shows them all and takes you there.
 
-![herd mode: one key shows every agent, the ones that need you first](docs/demo.gif)
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <a href="docs/demo-still.png"><img src="docs/demo-still.png" alt="Herd mode: a popup listing every session and agent, blocked ones first"></a>
+      <br><sub><b>Herd mode</b> (<code>prefix + a</code>): every agent, the ones that need you first</sub>
+    </td>
+    <td align="center" width="50%">
+      <a href="docs/demo-pinned.png"><img src="docs/demo-pinned.png" alt="Pinned sidebar next to two agents working, with a blocked agent at the top"></a>
+      <br><sub><b>Pinned</b> (<code>p</code>): a live sidebar in every window</sub>
+    </td>
+  </tr>
+</table>
 
 Works with **Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, OpenCode,
 pi and aider**, and anything else that can run a script. Plain tmux 3.3+,
