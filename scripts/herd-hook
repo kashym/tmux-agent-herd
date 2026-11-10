@@ -9,8 +9,8 @@
 # to herdd. It never fails and never prints, so it cannot break or slow the
 # agent. $HERD_AGENT is used when --agent is not given.
 [ -n "$TMUX_PANE" ] && [ -n "$TMUX" ] || exit 0
-dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-herd="$dir/../bin/herd"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+herd="$root/bin/herd"
 [ -x "$herd" ] || herd="$(command -v herd 2>/dev/null)"
 [ -n "$herd" ] || exit 0
 args=()
