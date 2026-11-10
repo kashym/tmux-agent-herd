@@ -16,7 +16,7 @@ import (
 )
 
 // version is overridden at release time with -ldflags "-X main.version=...".
-var version = "0.1.0" // keep in sync with VERSION
+var version = "0.2.0" // keep in sync with VERSION
 
 const usage = `herd — agent awareness for tmux
 
@@ -38,6 +38,7 @@ Drive:
 UI (bound to keys by the plugin):
   pick [--client C]                      fzf picker of agent panes
   jump blocked|done [--client C]         go to the oldest blocked / unseen done pane
+  sidebar [--toggle|--ensure] [--window W] [--width N]   live agent sidebar pane
 
 Setup:
   setup <harness...|all> [--yes]         connect an agent harness to herd (shows a diff, asks first)
@@ -141,6 +142,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = cmdPrompt(g, rest)
 	case "jump":
 		err = cmdJump(g, rest)
+	case "sidebar":
+		err = cmdSidebar(g, rest, stdout)
 	case "setup":
 		err = cmdSetup(g, rest, stdout)
 	case "install-skill":

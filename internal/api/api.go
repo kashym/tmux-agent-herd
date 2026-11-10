@@ -39,6 +39,7 @@ type Request struct {
 	For     []string `json:"for,omitempty"`
 	Timeout float64  `json:"timeout,omitempty"` // seconds, 0 = forever
 	All     bool     `json:"all,omitempty"`     // ls: include non-agent panes
+	Cached  bool     `json:"cached,omitempty"`  // ls: last poll's view, no fresh tmux scan
 }
 
 // Pane is one row of `ls`.

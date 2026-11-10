@@ -811,3 +811,100 @@ func TestSetupAllHarnesses(t *testing.T) {
 		}
 	}
 }
+
+// --- sidebar ---
+
+func (e *env) sidebarPane(window string) string {
+	e.t.Helper()
+	for _, l := range strings.Split(strings.TrimSpace(e.tmux("list-panes", "-t", window, "-F", "#{pane_id} #{@herd_sidebar}")), "\n") {
+		if id, mark, _ := strings.Cut(l, " "); mark == "1" {
+			return id
+		}
+	}
+	return ""
+}
+
+func TestSidebar(t *testing.T) {
+	e := newEnv(t)
+	e.startDaemon()
+	a := e.fakeNamed("codex", filepath.Join(e.home, "a"), "claude/idle-fresh.txt")
+	b := e.fakeNamed("pi", filepath.Join(e.home, "b"), "claude/idle-fresh.txt")
+	e.waitState(a, "idle", 3*time.Second)
+	e.waitState(b, "idle", 3*time.Second)
+	e.hookArgs(a, "--agent", "codex", "--kind", "permission", "--msg", "Bash: rm -rf dist", "blocked")
+	e.hookArgs(b, "--agent", "pi", "working")
+
+	me := e.inPane("%0")
+	if out, err := e.herdErr(me, "sidebar", "--toggle"); err != nil {
+		t.Fatal(out)
+	}
+	sb := e.sidebarPane("main:0")
+	if sb == "" {
+		t.Fatal("sidebar pane not created")
+	}
+	if w := e.opt(sb, "#{pane_width}"); w != "32" {
+		t.Errorf("width = %s", w)
+	}
+	var screen string
+	e.eventually(3*time.Second, func() string {
+		screen = e.tmux("capture-pane", "-p", "-t", sb)
+		for _, want := range []string{"herd", "SESSIONS", "main", "AGENTS 2", "codex · permission", "Bash: rm -rf dist", "pi"} {
+			if !strings.Contains(screen, want) {
+				return "missing " + want + " in:\n" + screen
+			}
+		}
+		return ""
+	})
+	// Blocked agent sorts first.
+	if strings.Index(screen, "codex") > strings.Index(screen, "◐ pi") {
+		t.Errorf("blocked agent should be listed first:\n%s", screen)
+	}
+	// Items: session main, codex, pi. Two downs + Enter focuses pi.
+	e.tmux("send-keys", "-t", sb, "j", "j", "Enter")
+	e.eventually(2*time.Second, func() string {
+		if cur := e.opt("main:", "#{pane_id}"); cur != b {
+			return "active pane " + cur + ", want " + b
+		}
+		return ""
+	})
+	// Toggle closes it.
+	if out, err := e.herdErr(me, "sidebar", "--toggle"); err != nil {
+		t.Fatal(out)
+	}
+	e.eventually(2*time.Second, func() string {
+		if e.sidebarPane("main:0") != "" {
+			return "sidebar still open"
+		}
+		return ""
+	})
+}
+
+func TestSidebarAlwaysOn(t *testing.T) {
+	e := newEnv(t, "@herd-sidebar", "on")
+	e.tmux("run-shell", filepath.Join(pluginRoot, "agent-herd.tmux"))
+	e.eventually(3*time.Second, func() string {
+		if e.sidebarPane("main:0") == "" {
+			return "no sidebar in existing window"
+		}
+		return ""
+	})
+	w := strings.TrimSpace(e.tmux("new-window", "-d", "-P", "-F", "#{window_id}"))
+	e.eventually(3*time.Second, func() string {
+		if e.sidebarPane(w) == "" {
+			return "no sidebar in new window"
+		}
+		return ""
+	})
+	// When the last real pane closes, the sidebar exits and the window goes.
+	for _, l := range strings.Split(strings.TrimSpace(e.tmux("list-panes", "-t", w, "-F", "#{pane_id} #{@herd_sidebar}")), "\n") {
+		if id, mark, _ := strings.Cut(l, " "); mark != "1" {
+			e.tmux("kill-pane", "-t", id)
+		}
+	}
+	e.eventually(3*time.Second, func() string {
+		if strings.Contains(e.tmux("list-windows", "-F", "#{window_id}"), w) {
+			return "window with only a sidebar should close"
+		}
+		return ""
+	})
+}

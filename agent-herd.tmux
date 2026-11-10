@@ -31,17 +31,38 @@ setup_path() {
 }
 
 setup_keys() {
-	local herd key bkey dkey
+	local herd key bkey dkey skey
 	herd="$(q "$HERD")"
 	key="$(get_opt @herd-picker-key a)"
 	bkey="$(get_opt @herd-blocked-key B)"
 	dkey="$(get_opt @herd-done-key D)"
+	skey="$(get_opt @herd-sidebar-key S)"
 	[ -n "$key" ] && [ "$key" != off ] &&
 		tmux bind-key "$key" display-popup -E -w 90% -h 80% -T ' herd ' "$herd pick --client '#{client_name}'"
 	[ -n "$bkey" ] && [ "$bkey" != off ] &&
 		tmux bind-key "$bkey" run-shell -b "$herd jump blocked --client '#{client_name}'"
 	[ -n "$dkey" ] && [ "$dkey" != off ] &&
 		tmux bind-key "$dkey" run-shell -b "$herd jump done --client '#{client_name}'"
+	[ -n "$skey" ] && [ "$skey" != off ] &&
+		tmux bind-key "$skey" run-shell -b "$herd sidebar --toggle --window '#{window_id}'"
+	return 0
+}
+
+setup_sidebar() {
+	# @herd-sidebar on: keep a sidebar in every window, like a dashboard.
+	local herd w
+	herd="$(q "$HERD")"
+	if is_on "$(get_opt @herd-sidebar off)"; then
+		tmux set-hook -g 'after-new-window[4210]' "run-shell -b \"$herd sidebar --ensure --window #{window_id}\""
+		tmux set-hook -g 'after-new-session[4210]' "run-shell -b \"$herd sidebar --ensure --window #{window_id}\""
+		for w in $(tmux list-windows -a -F '#{window_id}'); do
+			tmux run-shell -b "$herd sidebar --ensure --window $w"
+		done
+	else
+		tmux set-hook -gu 'after-new-window[4210]' 2>/dev/null
+		tmux set-hook -gu 'after-new-session[4210]' 2>/dev/null
+	fi
+	return 0
 }
 
 setup_hooks() {
@@ -104,5 +125,6 @@ main() {
 	setup_hooks
 	setup_status
 	start_daemon
+	setup_sidebar
 }
 main

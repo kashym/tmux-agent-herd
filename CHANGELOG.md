@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- **Sidebar**: a live dashboard pane with sessions and agents sorted by
+  urgency; keyboard and mouse navigation, send a prompt, kill a pane.
+  Toggle with `prefix + S`, or `set -g @herd-sidebar on` for every window.
+- `herd setup --remove` and `install-skill --remove`; the installer's
+  `--uninstall` uses them
+
 ## 0.1.0
 
 First release.

@@ -13,9 +13,24 @@ agent's state in your status line, sends a desktop notification when one needs
 you, and takes you to it with one key.
 
 ```
+ herd               ●1 ✗1 ◐2 ✓1  │
+──────────────────────────────── │
+ SESSIONS                        │
+  ✗ side                      2  │   your agents and shells,
+▍ ● work                      3  │   as usual
+                                 │
+ AGENTS 5                        │
+  ● codex · permission       1m  │
+    work:1.0 · Bash: rm -rf dist │
+  ✗ opencode                 4m  │
+    side:1.0 · 402: out of cred… │
+  ✓ pi                       2m  │
+  ◐ claude                  14s  │
+    work:0.2 · Edit              │
+ ⏎ go  s send  x kill  q         │
+
 status line   ● 1 blocked  ◐ 2 working  ✓ 1 done
 window list   ● 1:api   ◐ 2:web   ✓ 3:docs   4:notes
-pane border   codex · blocked · Bash: rm -rf dist
 ```
 
 Works with **Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, OpenCode,
@@ -69,6 +84,19 @@ needed if no release exists for your platform.
 | `prefix + a` | Picker: all agents, the ones that need you first, with a live preview. `enter` go there, `ctrl-r` send a prompt, `ctrl-x` kill |
 | `prefix + B` | Jump to the agent that has been **blocked** longest |
 | `prefix + D` | Jump to the agent that **finished** and you haven't looked at yet |
+| `prefix + S` | Toggle the **sidebar** in this window |
+
+### Sidebar
+
+A live dashboard pane down the left of the window: every session with its
+most urgent state, and every agent sorted by who needs you first, with where
+it is and what it's waiting on. Click a row or use `j`/`k` and `Enter` to
+jump there; `s` sends a prompt, `x` kills the pane, `B`/`D` jump to the next
+blocked/done agent, `q` closes it.
+
+To keep it open in every window (closer to a dedicated agent multiplexer),
+add `set -g @herd-sidebar on` to your tmux config. It uses 32 columns
+(`@herd-sidebar-width`) and closes itself when the rest of its window does.
 
 | State | Meaning |
 | --- | --- |
@@ -150,6 +178,9 @@ Set these in your tmux config before the plugin line.
 | `@herd-picker-key` | `a` | Picker key (`off` to disable) |
 | `@herd-blocked-key` | `B` | Jump-to-blocked key |
 | `@herd-done-key` | `D` | Jump-to-done key (replaces tmux's default `choose-client` on `D`) |
+| `@herd-sidebar` | `off` | `on` keeps a sidebar in every window |
+| `@herd-sidebar-key` | `S` | Sidebar toggle key |
+| `@herd-sidebar-width` | `32` | Sidebar width in columns |
 | `@herd-notify` | `blocked,done` | States that notify (`off` to disable) |
 | `@herd-notify-cmd` | auto | Your own notifier, run as `sh -c "$cmd" herd <title> <body>` |
 | `@herd-poll-ms` | `1000` | Screen check interval |

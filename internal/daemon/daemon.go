@@ -467,9 +467,11 @@ func (d *Daemon) handle(req api.Request) api.Response {
 	case api.OpList:
 		d.mu.Lock()
 		defer d.mu.Unlock()
-		now := d.now()
-		d.observe(now)
-		d.flush(now)
+		if !req.Cached {
+			now := d.now()
+			d.observe(now)
+			d.flush(now)
+		}
 		return api.Response{OK: true, Panes: d.list(req.All)}
 	case api.OpWait:
 		return d.handleWait(req)
