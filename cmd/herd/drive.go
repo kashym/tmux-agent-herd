@@ -20,13 +20,13 @@ func resolvePane(g *globals, arg string) (string, error) {
 	if arg == "" {
 		return "", errors.New("missing pane (use a pane id like %3, a target like main:1.0, or a --name)")
 	}
-	out, err := g.tc.Run("list-panes", "-a", "-F", "#{pane_id}\x1f#{@herd_name}")
+	out, err := g.tc.Run("list-panes", "-a", "-F", "#{pane_id}|~|#{@herd_name}")
 	if err != nil {
 		return "", err
 	}
 	var byName []string
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		id, name, _ := strings.Cut(line, "\x1f")
+		id, name, _ := strings.Cut(line, "|~|")
 		if id == arg {
 			return id, nil
 		}

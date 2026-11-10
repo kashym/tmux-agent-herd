@@ -91,7 +91,14 @@ func (c *Client) RunBatch(b *Batch) error {
 	return err
 }
 
-const sep = "\x1f"
+// Field and record markers are printable on purpose: tmux escapes control
+// characters in format output under some locales (e.g. LC_ALL=C turns
+// \x1f into "_").
+const (
+	sep       = "|~|"
+	capPrefix = "@@herd-capture:"
+	capSuffix = "@@"
+)
 
 var paneFormat = strings.Join([]string{
 	"P", "#{pane_id}", "#{pane_current_command}", "#{session_name}", "#{session_id}",
@@ -130,7 +137,7 @@ func (c *Client) Poll(configFormat string, caps []CaptureReq) (Snapshot, error) 
 		b.Add("display-message", "-p", "O"+sep+configFormat)
 	}
 	for _, r := range caps {
-		capture := "display-message -p -t " + r.ID + " '\x1e#{pane_id}' ; capture-pane -p -J -t " + r.ID
+		capture := "display-message -p -t " + r.ID + " '" + capPrefix + "#{pane_id}" + capSuffix + "' ; capture-pane -p -J -t " + r.ID
 		if r.SkipIfActivity != 0 {
 			b.Add("if-shell", "-F", "-t", r.ID, "#{!=:#{window_activity},"+strconv.FormatInt(r.SkipIfActivity, 10)+"}", capture)
 		} else {
@@ -147,8 +154,24 @@ func (c *Client) Poll(configFormat string, caps []CaptureReq) (Snapshot, error) 
 // ParseSnapshot parses Poll output.
 func ParseSnapshot(out string) Snapshot {
 	s := Snapshot{Captures: map[string]string{}}
-	head, rest, _ := strings.Cut(out, "\x1e")
-	for _, line := range strings.Split(head, "\n") {
+	cur := "" // pane id whose capture we are reading
+	var buf []string
+	flush := func() {
+		if cur != "" {
+			s.Captures[cur] = strings.Join(buf, "\n")
+		}
+		buf = nil
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, capPrefix) && strings.HasSuffix(line, capSuffix) {
+			flush()
+			cur = strings.TrimSuffix(strings.TrimPrefix(line, capPrefix), capSuffix)
+			continue
+		}
+		if cur != "" {
+			buf = append(buf, line)
+			continue
+		}
 		f := strings.Split(line, sep)
 		switch {
 		case len(f) == 14 && f[0] == "P":
@@ -168,47 +191,8 @@ func ParseSnapshot(out string) Snapshot {
 			s.Config = strings.TrimPrefix(line, "O"+sep)
 		}
 	}
-	if rest != "" {
-		for _, chunk := range strings.Split("\x1e"+rest, "\x1e")[1:] {
-			id, screen, ok := strings.Cut(chunk, "\n")
-			if ok {
-				s.Captures[id] = screen
-			}
-		}
-	}
+	flush()
 	return s
-}
-
-// CaptureMany captures the visible screen of several panes in one exec.
-// Panes that fail (e.g. just closed) are missing from the result.
-func (c *Client) CaptureMany(ids []string) map[string]string {
-	res := map[string]string{}
-	if len(ids) == 0 {
-		return res
-	}
-	var b Batch
-	for _, id := range ids {
-		b.Add("display-message", "-p", "-t", id, "\x1e"+"#{pane_id}")
-		b.Add("capture-pane", "-p", "-J", "-t", id)
-	}
-	out, err := c.Run(b.args...)
-	if err != nil && out == "" {
-		// One bad pane aborts the batch; fall back to one by one.
-		for _, id := range ids {
-			if o, err := c.Run("capture-pane", "-p", "-J", "-t", id); err == nil {
-				res[id] = o
-			}
-		}
-		return res
-	}
-	for _, chunk := range strings.Split(out, "\x1e")[1:] {
-		nl := strings.IndexByte(chunk, '\n')
-		if nl < 0 {
-			continue
-		}
-		res[chunk[:nl]] = chunk[nl+1:]
-	}
-	return res
 }
 
 // Capture returns the last n lines of a pane's history+screen, joined.

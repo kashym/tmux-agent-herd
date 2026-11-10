@@ -34,12 +34,12 @@ func ConfigFormat() string {
 	for _, n := range optNames {
 		parts = append(parts, "#{"+n+"}")
 	}
-	return strings.Join(parts, "\x1f")
+	return strings.Join(parts, "|~|")
 }
 
 // ParseConfigLine parses an expanded ConfigFormat.
 func ParseConfigLine(line string) Config {
-	f := strings.Split(strings.TrimRight(line, "\n"), "\x1f")
+	f := strings.Split(strings.TrimRight(line, "\n"), "|~|")
 	if len(f) != len(optNames) {
 		f = nil
 	}
