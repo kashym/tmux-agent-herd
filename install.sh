@@ -5,10 +5,11 @@
 #
 # What it does (asking before each change, backing up anything it edits):
 #   1. checks tmux >= 3.3 and git
-#   2. clones the plugin to ~/.tmux/plugins/tmux-agent-herd (or updates it)
+#   2. clones the plugin where TPM keeps plugins (~/.config/tmux/plugins or
+#      ~/.tmux/plugins), or updates it
 #   3. installs the `herd` binary (release download, or `go build`)
-#   4. adds the plugin to your tmux config (TPM line if you use TPM,
-#      otherwise a run-shell line) and loads it into running tmux
+#   4. adds the plugin to your tmux config (a TPM line if you use TPM; if
+#      not, offers to install TPM) and loads it into running tmux
 #   5. connects the agent CLIs it finds (Claude Code, Codex, Gemini CLI,
 #      Copilot CLI, OpenCode, pi, aider) — each one shown as a diff first
 #   6. optionally installs the herd skill so your agents can use the CLI
@@ -99,21 +100,24 @@ backup() {
 }
 
 # --- locations ------------------------------------------------------------
-tmux_conf() {
-	local xdg="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf"
-	if [ -f "$HOME/.tmux.conf" ]; then
-		echo "$HOME/.tmux.conf"
-	elif [ -f "$xdg" ]; then
-		echo "$xdg"
-	else
-		echo "$HOME/.tmux.conf"
-	fi
-}
-CONF="$(tmux_conf)"
+# Same rules as TPM: the XDG config wins if it exists, and plugins live next
+# to it (~/.config/tmux/plugins) or in ~/.tmux/plugins.
+XDG_TMUX="${XDG_CONFIG_HOME:-$HOME/.config}/tmux"
+if [ -f "$XDG_TMUX/tmux.conf" ]; then
+	CONF="$XDG_TMUX/tmux.conf"
+	DEFAULT_PLUGINS="$XDG_TMUX/plugins"
+else
+	CONF="$HOME/.tmux.conf"
+	DEFAULT_PLUGINS="$HOME/.tmux/plugins"
+fi
+tpm_env() { tmux show-environment -g TMUX_PLUGIN_MANAGER_PATH 2>/dev/null | sed -n 's/^TMUX_PLUGIN_MANAGER_PATH=//p' || true; }
+PLUGINS_DIR="${TMUX_PLUGIN_MANAGER_PATH:-$(tpm_env)}"
+PLUGINS_DIR="${PLUGINS_DIR:-$DEFAULT_PLUGINS}"
+PLUGINS_DIR="${PLUGINS_DIR%/}"
 uses_tpm() { [ -f "$CONF" ] && grep -Eq "^[[:space:]]*set(-option)?[[:space:]]+-g[[:space:]]+@plugin[[:space:]]+['\"]tmux-plugins/tpm['\"]" "$CONF"; }
-PLUGINS_DIR="${TMUX_PLUGIN_MANAGER_PATH:-$HOME/.tmux/plugins}"
-DIR="${HERD_PLUGIN_DIR:-${PLUGINS_DIR%/}/tmux-agent-herd}"
+DIR="${HERD_PLUGIN_DIR:-$PLUGINS_DIR/tmux-agent-herd}"
 HERD="$DIR/bin/herd"
+TPM_DIR="$PLUGINS_DIR/tpm"
 tmux_running() { tmux list-sessions >/dev/null 2>&1; }
 
 # --- uninstall ------------------------------------------------------------
@@ -182,40 +186,58 @@ info "$("$HERD" version) at $HERD"
 
 # --- 4. tmux config -------------------------------------------------------
 step "Adding the plugin to $CONF"
+WANT_TPM=0
 if [ -f "$CONF" ] && grep -q "tmux-agent-herd" "$CONF"; then
 	info "already present"
 else
 	if uses_tpm; then
-		line="set -g @plugin '$PLUGIN_SPEC'"
-		info "you use TPM; adding: $line"
+		lines="set -g @plugin '$PLUGIN_SPEC'"
+		info "you use TPM; adding: $lines"
+	elif ask "You don't use TPM, the tmux plugin manager. Install it too? (recommended: prefix + I / U to install and update plugins)" y; then
+		WANT_TPM=1
+		lines="set -g @plugin 'tmux-plugins/tpm'
+set -g @plugin '$PLUGIN_SPEC'
+run '${TPM_DIR/#$HOME/\~}/tpm'"
+		info "adding TPM and the plugin:"
+		printf '%s\n' "$lines" | sed 's/^/      /'
 	else
-		line="run-shell '$DIR/agent-herd.tmux'"
-		info "adding: $line"
+		lines="run-shell '$DIR/agent-herd.tmux'"
+		info "adding: $lines"
 	fi
 	conf_target="$CONF"
 	[ -L "$CONF" ] && conf_target="$(readlink -f "$CONF" 2>/dev/null || echo "$CONF")"
 	if [ -e "$conf_target" ] && [ ! -w "$conf_target" ]; then
 		warn "$CONF is read-only (managed by Nix/home-manager or similar)."
-		warn "Add this line to your tmux config yourself: $line"
+		warn "Add these lines to your tmux config yourself:"
+		printf '%s\n' "$lines" | sed 's/^/      /'
 	elif ask "Edit $CONF?" y; then
 		mkdir -p "$(dirname "$CONF")"
 		backup "$CONF"
 		touch "$CONF"
+		if [ "$WANT_TPM" = 1 ] && [ ! -d "$TPM_DIR" ]; then
+			git clone --quiet --depth 1 https://github.com/tmux-plugins/tpm "$TPM_DIR" && info "installed TPM in $TPM_DIR"
+		fi
 		if uses_tpm && grep -Eq "^[[:space:]]*run(-shell)?[[:space:]].*tpm/tpm" "$CONF"; then
 			# @plugin lines must come before TPM's run line.
 			tmp="$(mktemp)"
-			awk -v l="$line" '!done && /^[[:space:]]*run(-shell)?[[:space:]].*tpm\/tpm/ { print l; done=1 } { print }' "$CONF" >"$tmp"
+			awk -v l="$lines" '!done && /^[[:space:]]*run(-shell)?[[:space:]].*tpm\/tpm/ { print l; done=1 } { print }' "$CONF" >"$tmp"
 			cat "$tmp" >"$CONF" && rm -f "$tmp"
 		else
-			printf '\n# tmux-agent-herd: agent state in tmux (https://github.com/kashym/tmux-agent-herd)\n%s\n' "$line" >>"$CONF"
+			# TPM's run line must stay last in the file.
+			printf '\n# tmux-agent-herd: agent state in tmux (https://github.com/kashym/tmux-agent-herd)\n%s\n' "$lines" >>"$CONF"
 		fi
 		info "updated $CONF"
 	else
-		warn "skipped; add this line yourself: $line"
+		warn "skipped; add this yourself:"
+		printf '%s\n' "$lines" | sed 's/^/      /'
 	fi
 fi
 if tmux_running; then
-	tmux run-shell "$DIR/agent-herd.tmux" && info "loaded into your running tmux server"
+	if [ "$WANT_TPM" = 1 ] && [ -x "$TPM_DIR/tpm" ]; then
+		tmux source-file "$CONF" && info "reloaded $CONF (TPM and the plugin are loaded)"
+	else
+		tmux run-shell "$DIR/agent-herd.tmux" && info "loaded into your running tmux server"
+	fi
 else
 	info "tmux is not running; the plugin loads the next time you start tmux"
 fi

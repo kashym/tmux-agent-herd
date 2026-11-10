@@ -23,6 +23,7 @@ setup_path() {
 	# Let agents and scripts in new panes call `herd` directly (@herd-path off
 	# to skip; HERD_BIN always points at the binary).
 	tmux set-environment -g HERD_BIN "$HERD"
+	tmux set-environment -g HERD_HOOK "$CURRENT_DIR/scripts/herd-hook"
 	is_on "$(get_opt @herd-path on)" || return 0
 	local path
 	path="$(tmux show-environment -g PATH 2>/dev/null)"

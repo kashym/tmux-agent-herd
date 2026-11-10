@@ -68,8 +68,8 @@ herd install-skill   # optional: lets your agents use herd themselves
 curl -fsSL https://raw.githubusercontent.com/kashym/tmux-agent-herd/main/install.sh | bash
 ```
 
-It checks tmux and git, clones the plugin to `~/.tmux/plugins/`, adds one line
-to your tmux config, connects the agent CLIs it finds and offers the skill.
+It checks tmux and git, offers to install TPM if you don't have it, clones the
+plugin where TPM keeps plugins, adds it to your tmux config, connects the agent CLIs it finds and offers the skill.
 Every change needs a yes and edited files are backed up. Read it first if you
 like (`--help` for options); `--uninstall` undoes it.
 </details>
@@ -163,12 +163,13 @@ herd setup --remove all      # take herd back out
 **Your agent isn't listed?** Call the adapter from its hooks:
 
 ```sh
-~/.tmux/plugins/tmux-agent-herd/scripts/herd-hook --agent mytool working
-~/.tmux/plugins/tmux-agent-herd/scripts/herd-hook --agent mytool --kind permission --msg "Approve rm?" blocked
-~/.tmux/plugins/tmux-agent-herd/scripts/herd-hook --agent mytool done     # also: idle, error, none
+"$HERD_HOOK" --agent mytool working
+"$HERD_HOOK" --agent mytool --kind permission --msg "Approve rm?" blocked
+"$HERD_HOOK" --agent mytool done     # also: idle, error, none
 ```
 
-It never prints and always exits 0, so it can't break your agent. Add the
+`$HERD_HOOK` is set in every tmux pane (it's `scripts/herd-hook` in the plugin
+directory). It never prints and always exits 0, so it can't break your agent. Add the
 command name to `@herd-agents` and
 [open an issue](https://github.com/kashym/tmux-agent-herd/issues/new?template=new_harness.yml)
 so it can be supported out of the box.
@@ -215,7 +216,7 @@ everything.
 
 TPM: remove the line and press `prefix + alt + u`, then run
 `herd setup --remove all` to take herd out of your agent CLIs. With the script:
-`bash ~/.tmux/plugins/tmux-agent-herd/install.sh --uninstall`.
+`curl -fsSL https://raw.githubusercontent.com/kashym/tmux-agent-herd/main/install.sh | bash -s -- --uninstall`.
 
 ## Troubleshooting
 
