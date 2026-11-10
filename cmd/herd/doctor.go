@@ -75,11 +75,7 @@ func cmdDoctor(g *globals, args []string, stdout io.Writer) error {
 	}
 	if c := opt("@herd_conflicts"); c != "" {
 		for _, k := range strings.Fields(c) {
-			owner, _ := g.tc.Run("list-keys", "-T", "prefix", strings.TrimPrefix(k, "prefix+"))
-			what := strings.Fields(owner)
-			if len(what) > 4 {
-				what = what[4:] // drop "bind-key -T prefix KEY"
-			}
+			what := prefixBinding(g, strings.TrimPrefix(k, "prefix+"))
 			warn("%s is yours (%s); herd left it alone. Set @herd-key to another key.", k, oneLine(strings.Join(what, " "), 50))
 		}
 	}
@@ -173,4 +169,22 @@ func cmdWelcome(g *globals, _ []string) error {
 	}
 	_ = os.MkdirAll(filepath.Dir(marker), 0o755)
 	return os.WriteFile(marker, []byte(time.Now().Format(time.RFC3339)+"\n"), 0o644)
+}
+
+// prefixBinding returns the command words bound to key in the prefix table
+// (filtering the full list: tmux 3.2 cannot list a single key).
+func prefixBinding(g *globals, key string) []string {
+	out, _ := g.tc.Run("list-keys", "-T", "prefix")
+	for _, l := range strings.Split(out, "\n") {
+		f := strings.Fields(l)
+		for i := 0; i+1 < len(f); i++ {
+			if f[i] == "prefix" {
+				if f[i+1] == key {
+					return f[i+2:]
+				}
+				break
+			}
+		}
+	}
+	return nil
 }

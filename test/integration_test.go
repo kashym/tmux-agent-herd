@@ -914,6 +914,22 @@ func TestSidebarAlwaysOn(t *testing.T) {
 
 // --- tmux citizenship ---
 
+// binding returns the prefix-table line for key ("" if unbound).
+func (e *env) binding(key string) string {
+	for _, l := range strings.Split(e.tmux("list-keys", "-T", "prefix"), "\n") {
+		f := strings.Fields(l)
+		for i := 0; i+1 < len(f); i++ {
+			if f[i] == "prefix" {
+				if f[i+1] == key {
+					return l
+				}
+				break
+			}
+		}
+	}
+	return ""
+}
+
 func TestNeverClobbersBindings(t *testing.T) {
 	e := newEnv(t)
 	// A C-a user's classic setup, plus a binding left by an older herd.
@@ -922,19 +938,19 @@ func TestNeverClobbersBindings(t *testing.T) {
 	e.tmux("bind-key", "D", "run-shell", "/old/plugin/bin/herd jump done")
 	e.tmux("run-shell", filepath.Join(pluginRoot, "agent-herd.tmux"))
 
-	if k := e.tmux("list-keys", "-T", "prefix", "a"); !strings.Contains(k, "send-prefix") {
+	if k := e.binding("a"); !strings.Contains(k, "send-prefix") {
 		t.Errorf("prefix+a was taken over: %s", k)
 	}
 	if c := strings.TrimSpace(e.tmux("show-option", "-gqv", "@herd_conflicts")); c != "prefix+a" {
 		t.Errorf("@herd_conflicts = %q", c)
 	}
-	if k := e.tmux("list-keys", "-T", "prefix", "D"); !strings.Contains(k, "choose-client") {
+	if k := e.binding("D"); !strings.Contains(k, "choose-client") {
 		t.Errorf("old herd binding on D should give way to tmux's default: %s", k)
 	}
 	// Choosing a free key binds it.
 	e.tmux("set-option", "-g", "@herd-key", "H")
 	e.tmux("run-shell", filepath.Join(pluginRoot, "agent-herd.tmux"))
-	if k := e.tmux("list-keys", "-T", "prefix", "H"); !strings.Contains(k, "mode --client") {
+	if k := e.binding("H"); !strings.Contains(k, "mode --client") {
 		t.Errorf("prefix+H not bound to herd mode: %s", k)
 	}
 	if c := strings.TrimSpace(e.tmux("show-option", "-gqv", "@herd_conflicts")); c != "" {
