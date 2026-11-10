@@ -1,0 +1,4 @@
+/bin/
+/dist/
+/herd
+*.herd-backup-*

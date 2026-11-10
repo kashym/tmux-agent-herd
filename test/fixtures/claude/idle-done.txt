@@ -1,0 +1,9 @@
+> refactor the parser into its own package
+
+● Done. The parser now lives in internal/parse and all tests pass.
+  Do you want me to also update the README?
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ >                                                                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+  ? for shortcuts

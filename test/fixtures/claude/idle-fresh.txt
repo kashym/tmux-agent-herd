@@ -1,0 +1,10 @@
+ ✻ Welcome to Claude Code!
+
+   /help for help, /status for your current setup
+
+   cwd: /home/user/project
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ > Try "write a test for <filepath>"                                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+  ? for shortcuts

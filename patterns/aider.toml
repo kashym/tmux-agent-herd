@@ -1,0 +1,14 @@
+# Screen heuristics for aider. aider leaves answered prompts in the
+# transcript, so blocked only matches an unanswered prompt on the last line.
+agent = "aider"
+lines = 15
+default = "idle"
+
+[[rules]]
+state = "blocked"
+kind = "question"
+match = '\(Y\)es/\(N\)o[^\n]*\]:\s*\z'
+
+[[rules]]
+state = "working"
+match = '(?m)^.*\bWaiting for \S+.*\z'

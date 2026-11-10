@@ -1,0 +1,20 @@
+name: Support a new agent CLI
+description: Ask for (or offer) support for another coding agent
+labels: [harness]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Agent CLI
+    validations:
+      required: true
+  - type: textarea
+    id: hooks
+    attributes:
+      label: Does it have hooks, plugins or extensions? Link the docs.
+  - type: textarea
+    id: screens
+    attributes:
+      label: Screens
+      description: Paste captures (`tmux capture-pane -p`) of it idle, working, and asking for permission.
+      render: text

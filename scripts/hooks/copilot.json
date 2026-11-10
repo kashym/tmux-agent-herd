@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "userPromptSubmitted": [{ "type": "command", "bash": "__HERD_HOOK__ --agent copilot working", "timeoutSec": 5 }],
+    "preToolUse": [{ "type": "command", "bash": "__HERD_HOOK__ --agent copilot working", "timeoutSec": 5 }],
+    "postToolUse": [{ "type": "command", "bash": "__HERD_HOOK__ --agent copilot working", "timeoutSec": 5 }],
+    "permissionRequest": [{ "type": "command", "bash": "__HERD_HOOK__ --agent copilot blocked", "timeoutSec": 5 }],
+    "agentStop": [{ "type": "command", "bash": "__HERD_HOOK__ --agent copilot done", "timeoutSec": 5 }],
+    "errorOccurred": [{ "type": "command", "bash": "__HERD_HOOK__ --agent copilot error", "timeoutSec": 5 }],
+    "sessionEnd": [{ "type": "command", "bash": "__HERD_HOOK__ --agent copilot none", "timeoutSec": 5 }]
+  }
+}

@@ -1,0 +1,18 @@
+# Screen heuristics for the Gemini CLI.
+agent = "gemini"
+lines = 40
+default = "idle"
+
+[[rules]]
+state = "blocked"
+kind = "permission"
+match = '(?mi)(allow execution\b|apply this change\?|waiting for user confirmation|yes, allow once)'
+
+[[rules]]
+state = "blocked"
+kind = "auth"
+match = '(?mi)(waiting for auth|login with google|get started.*how would you like to authenticate)'
+
+[[rules]]
+state = "working"
+match = '(?i)\(esc to cancel'

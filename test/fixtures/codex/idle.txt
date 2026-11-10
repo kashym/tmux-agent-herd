@@ -1,0 +1,4 @@
+• Fixed the off-by-one in parser.rs; all 42 tests pass.
+
+› Ask Codex to do anything
+  98% context left · ? for shortcuts

@@ -1,0 +1,15 @@
+> clean up the build output
+
+● I'll remove the dist directory.
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Bash command                                                                 │
+│                                                                              │
+│   rm -rf dist                                                                │
+│   Remove build output                                                        │
+│                                                                              │
+│ Do you want to proceed?                                                      │
+│ ❯ 1. Yes                                                                     │
+│   2. Yes, and don't ask again for rm commands in this project                │
+│   3. No, and tell Claude what to do differently (esc)                        │
+╰──────────────────────────────────────────────────────────────────────────────╯

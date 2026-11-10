@@ -1,0 +1,6 @@
+✦ The largest entries are node_modules (412M) and dist (38M).
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ >   Type your message or @path/to/file                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ ~/project                 no sandbox                 gemini-2.5-pro (98% context left)

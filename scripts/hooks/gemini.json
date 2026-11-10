@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "BeforeAgent": [
+      { "matcher": "*", "hooks": [{ "type": "command", "name": "herd", "command": "__HERD_HOOK__ --agent gemini working", "timeout": 5000 }] }
+    ],
+    "BeforeTool": [
+      { "matcher": "*", "hooks": [{ "type": "command", "name": "herd", "command": "__HERD_HOOK__ --agent gemini working", "timeout": 5000 }] }
+    ],
+    "AfterTool": [
+      { "matcher": "*", "hooks": [{ "type": "command", "name": "herd", "command": "__HERD_HOOK__ --agent gemini working", "timeout": 5000 }] }
+    ],
+    "Notification": [
+      { "matcher": "*", "hooks": [{ "type": "command", "name": "herd", "command": "__HERD_HOOK__ --agent gemini blocked", "timeout": 5000 }] }
+    ],
+    "AfterAgent": [
+      { "matcher": "*", "hooks": [{ "type": "command", "name": "herd", "command": "__HERD_HOOK__ --agent gemini done", "timeout": 5000 }] }
+    ],
+    "SessionEnd": [
+      { "matcher": "*", "hooks": [{ "type": "command", "name": "herd", "command": "__HERD_HOOK__ --agent gemini none", "timeout": 5000 }] }
+    ]
+  }
+}

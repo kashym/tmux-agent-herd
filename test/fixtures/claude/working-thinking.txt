@@ -1,0 +1,13 @@
+> refactor the parser into its own package
+
+● I'll start by reading the current parser.
+
+● Read(internal/parse/parse.go)
+  ⎿  Read 212 lines
+
+✻ Pondering… (14s · ↓ 1.2k tokens · esc to interrupt)
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ >                                                                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+  ⏵⏵ accept edits on (shift+tab to cycle)

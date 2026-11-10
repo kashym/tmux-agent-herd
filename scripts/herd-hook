@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# herd-hook: harness-neutral adapter that agent hooks/extensions call.
+#
+#   herd-hook [--agent NAME] [--msg TEXT] [--kind KIND] [--source hook|screen] <state>
+#   herd-hook [--agent NAME]          derive the state from hook JSON on stdin
+#
+# state: working | blocked | done | idle | error | none
+# Reads $TMUX_PANE (and the hook's stdin JSON, if any) and sends one event
+# to herdd. It never fails and never prints, so it cannot break or slow the
+# agent. $HERD_AGENT is used when --agent is not given.
+[ -n "$TMUX_PANE" ] && [ -n "$TMUX" ] || exit 0
+dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+herd="$dir/../bin/herd"
+[ -x "$herd" ] || herd="$(command -v herd 2>/dev/null)"
+[ -n "$herd" ] || exit 0
+args=()
+[ -n "$HERD_AGENT" ] && args=(--agent "$HERD_AGENT")
+"$herd" hook "${args[@]}" "$@" >/dev/null 2>&1
+exit 0

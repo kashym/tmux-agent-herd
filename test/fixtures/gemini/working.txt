@@ -1,0 +1,8 @@
+ > list the large files
+
+ ⠏ Analyzing the directory structure (esc to cancel, 4s)
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ >   Type your message or @path/to/file                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ ~/project                 no sandbox                 gemini-2.5-pro (99% context left)

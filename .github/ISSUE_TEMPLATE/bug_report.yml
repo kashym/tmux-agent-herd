@@ -1,0 +1,39 @@
+name: Bug report
+description: Something doesn't work as described
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: input
+    id: harness
+    attributes:
+      label: Agent CLI and version
+      placeholder: e.g. Codex CLI 0.167.0, pi 1.5.1
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Paste the output of these commands.
+      value: |
+        herd version:
+        tmux -V:
+        OS:
+        herd setup --list:
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: herd log
+      description: Output of `herd log` around the problem (remove anything private).
+      render: text
+  - type: textarea
+    id: screen
+    attributes:
+      label: Screen (for wrong states without hooks)
+      description: If a state is detected wrongly from the screen, paste `herd read <pane> --lines 40`. These become test fixtures.
+      render: text

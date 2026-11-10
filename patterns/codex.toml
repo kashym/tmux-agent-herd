@@ -1,0 +1,18 @@
+# Screen heuristics for the Codex CLI.
+agent = "codex"
+lines = 40
+default = "idle"
+
+[[rules]]
+state = "blocked"
+kind = "permission"
+match = '(?mi)(would you like to (run the following command|make the following edits|apply)|allow command\?|approve this|press enter to confirm or esc to cancel)'
+
+[[rules]]
+state = "blocked"
+kind = "auth"
+match = '(?mi)(sign in with chatgpt|provide your own api key|login required)'
+
+[[rules]]
+state = "working"
+match = '(?i)(esc to interrupt|ctrl\+c to interrupt)'

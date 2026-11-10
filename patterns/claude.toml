@@ -1,0 +1,31 @@
+# Screen heuristics for Claude Code. Rules are tried top to bottom over the
+# last `lines` lines of the visible screen; the first match wins.
+# Hooks (herd setup claude) are far more reliable; these are the fallback.
+agent = "claude"
+lines = 40
+default = "idle"
+
+[[rules]]
+state = "blocked"
+kind = "permission"
+match = '(?m)^[ \t│]*Do you want to (proceed|make this edit|create|allow|run|delete|overwrite)\b.*\?'
+
+[[rules]]
+state = "blocked"
+kind = "question"
+match = '(?mi)(do you trust the files in this folder|is this a project you created or one you trust)'
+
+[[rules]]
+state = "blocked"
+kind = "auth"
+match = '(?mi)(select login method|paste code here if prompted|please run /login|invalid api key)'
+
+[[rules]]
+state = "blocked"
+kind = "question"
+# AskUserQuestion / plan approval style menus.
+match = '(?m)(Enter to select · ↑/↓ to navigate|Would you like to proceed\?|Enter to confirm · Esc to (cancel|exit))'
+
+[[rules]]
+state = "working"
+match = '(?i)esc to interrupt'

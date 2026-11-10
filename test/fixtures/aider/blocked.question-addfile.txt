@@ -1,0 +1,8 @@
+Aider v0.86.1
+Main model: claude-sonnet with diff edit format
+Git repo: .git with 34 files
+Repo-map: using 4096 tokens, auto refresh
+> fix the bug in utils.py
+
+utils.py
+Add file to the chat? (Y)es/(N)o/(D)on't ask again [Yes]:
