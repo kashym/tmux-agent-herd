@@ -124,7 +124,7 @@ if [ "$UNINSTALL" = 1 ]; then
 			if [ "$YES" = 1 ]; then "$HERD" setup --remove all --yes || true; else "$HERD" setup --remove all || true; fi
 		fi
 		"$HERD" install-skill --remove >/dev/null 2>&1 || true
-		tmux_running && "$HERD" daemon --stop >/dev/null 2>&1 || true
+		if tmux_running; then "$HERD" daemon --stop >/dev/null 2>&1 || true; fi
 	fi
 	if [ -f "$CONF" ] && grep -q "tmux-agent-herd" "$CONF"; then
 		if ask "Remove the tmux-agent-herd lines from $CONF?" y; then
