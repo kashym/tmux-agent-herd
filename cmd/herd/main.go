@@ -16,7 +16,7 @@ import (
 )
 
 // version is overridden at release time with -ldflags "-X main.version=...".
-var version = "0.2.0" // keep in sync with VERSION
+var version = "0.2.1" // keep in sync with VERSION
 
 const usage = `herd — agent awareness for tmux
 

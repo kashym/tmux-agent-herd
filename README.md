@@ -12,25 +12,7 @@ you only find out by flipping through panes. tmux-agent-herd gives tmux
 agent awareness: every agent's state in your status line, a notification when
 one needs you, and **one key** that shows them all and takes you there.
 
-```
- herd               ●1 ✗1 ◐2 ✓1  │
-──────────────────────────────── │
- SESSIONS                        │
-  ✗ side                      2  │   your panes, untouched
-▍ ● work                      3  │
-                                 │
- AGENTS 5                        │
-  ● codex · permission       1m  │
-    work:1.0 · Bash: rm -rf dist │
-  ✗ opencode                 4m  │
-    side:1.0 · 402: out of cred… │
-  ✓ pi                       2m  │
-  ◐ claude                  14s  │
-    work:0.2 · Edit              │
- ⏎ go  / find  s send  p pin  esc│
-
-status line   ● 1 blocked  ◐ 2 working  ✓ 1 done
-```
+![herd mode: one key shows every agent, the ones that need you first](docs/demo.gif)
 
 Works with **Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, OpenCode,
 pi and aider**, and anything else that can run a script. Plain tmux 3.3+,
@@ -40,8 +22,6 @@ Inspired by [herdr](https://github.com/ogulcancelik/herdr), which builds agent
 awareness into its own multiplexer. tmux-agent-herd brings the same idea to
 the tmux you already have: your sessions, config, plugins, SSH workflow and
 muscle memory stay exactly as they are.
-
-<!-- TODO: add demo.gif here (scripts/demo.sh sets up the scene) -->
 
 ## Install
 

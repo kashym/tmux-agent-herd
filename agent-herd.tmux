@@ -48,13 +48,6 @@ key_owner() {
 	}'
 }
 
-# tmux >= 3.3 supports popup titles.
-popup_title() {
-	local v
-	v="$(tmux -V | sed -E 's/^tmux (next-)?([0-9]+)\.([0-9]+).*/\2\3/')"
-	[ "${v:-0}" -ge 33 ] && printf '%s' "-T"
-}
-
 # bind_herd KEY LABEL tmux-command...  — binds only if KEY is free or ours.
 bind_herd() {
 	local key="$1" label="$2" owner
@@ -82,14 +75,13 @@ release_old_key() {
 }
 
 setup_keys() {
-	local herd mkey bkey dkey skey pkey w
+	local herd mkey bkey dkey skey pkey
 	herd="$(q "$HERD")"
 	mkey="$(get_opt @herd-key a)"
 	bkey="$(get_opt @herd-blocked-key off)"
 	dkey="$(get_opt @herd-done-key off)"
 	skey="$(get_opt @herd-sidebar-key off)"
 	pkey="$(get_opt @herd-picker-key off)"
-	w="$(get_opt @herd-mode-width 32)"
 
 	for k in a B D S; do
 		case " $mkey $bkey $dkey $skey $pkey " in
@@ -98,15 +90,11 @@ setup_keys() {
 		esac
 	done
 
-	local title=() pt
-	pt="$(popup_title)"
-	[ -n "$pt" ] && title=("$pt" ' herd ')
-	bind_herd "$mkey" "herd_mode" display-popup -E -x 0 -y 0 -w "$((w + 2))" -h 100% "${title[@]}" \
-		"$herd mode --client '#{client_name}'"
+	bind_herd "$mkey" "herd_mode" run-shell -b "$herd mode --open --client '#{client_name}'"
 	bind_herd "$bkey" "jump_to_blocked" run-shell -b "$herd jump blocked --client '#{client_name}'"
 	bind_herd "$dkey" "jump_to_done" run-shell -b "$herd jump done --client '#{client_name}'"
 	bind_herd "$skey" "toggle_sidebar" run-shell -b "$herd sidebar --toggle --window '#{window_id}'"
-	bind_herd "$pkey" "fzf_picker" display-popup -E -w 90% -h 80% "${title[@]}" "$herd pick --client '#{client_name}'"
+	bind_herd "$pkey" "fzf_picker" display-popup -E -w 90% -h 80% "$herd pick --client '#{client_name}'"
 
 	tmux set-option -g @herd_keys "${BOUND[*]}"
 	tmux set-option -g @herd_conflicts "${CONFLICTS[*]}"

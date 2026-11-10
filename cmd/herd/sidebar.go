@@ -645,9 +645,9 @@ func (sb *sidebar) draw(out io.Writer) {
 	}
 
 	// Footer.
-	help := " ⏎ go  / find  s send  x kill  p pin"
-	if sb.popup {
-		help = " ⏎ go  / find  s send  p pin  esc"
+	help := " ⏎ go  / find  s send  p pin" // x kill, B/D, q: in the README
+	if sb.popup && sb.w >= 34 {
+		help += "  esc"
 	}
 	footer := ansiDim + fit(help, w) + ansiReset
 	switch {
@@ -723,9 +723,11 @@ func (sb *sidebar) draw(out io.Writer) {
 func (sb *sidebar) selStyle(item int, s string) string {
 	if item == sb.sel && sb.mode != "send" {
 		// Reverse video for the whole line, keeping glyph colours.
+		// A subtle tint (not reverse video) that keeps the state colours.
+		const sel = "\x1b[48;5;237m\x1b[1m"
 		plain := stripANSI(s)
 		pad := max(0, sb.w-utf8.RuneCountInString(plain))
-		return ansiRev + strings.ReplaceAll(s, ansiReset, ansiReset+ansiRev) + strings.Repeat(" ", pad) + ansiReset
+		return sel + strings.ReplaceAll(s, ansiReset, ansiReset+sel) + strings.Repeat(" ", pad) + ansiReset
 	}
 	return s
 }

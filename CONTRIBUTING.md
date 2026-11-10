@@ -48,10 +48,17 @@ Bump `VERSION` and `var version` in `cmd/herd/main.go`, update
 `CHANGELOG.md`, then tag: `git tag v0.2.0 && git push origin v0.2.0`. The
 release workflow builds binaries for linux/darwin × amd64/arm64.
 
-## Recording a demo
+## Recording the demo and preview image
 
-The README GIF is the project's front door. To re-record it, use
-[vhs](https://github.com/charmbracelet/vhs) or asciinema + agg, at about
-120×32: three agents in three windows, one becomes blocked, the status line and
-notification change, `prefix + B` jumps to it. Keep it under 20 seconds and
-1 MB, and save it as `docs/demo.gif`.
+The README GIF and the social preview are generated, so they can be redone
+whenever the UI changes:
+
+```sh
+go build -o bin/herd ./cmd/herd
+scripts/media/record-demo.sh       # docs/demo.gif + stills: demo-still.png, demo-pinned.png (~1 min)
+scripts/media/social-preview.sh    # docs/social-preview.png (1280x640)
+```
+
+They need tmux, python3, chromium (or Chrome) and ffmpeg, and run on a
+throwaway tmux server. The story is scripted in `record-demo.sh`. Upload
+`docs/social-preview.png` under Settings → General → Social preview.

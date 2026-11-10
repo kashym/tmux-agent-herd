@@ -654,7 +654,7 @@ func TestPluginEntryPoint(t *testing.T) {
 	e := newEnv(t, "@herd-border", "on")
 	e.tmux("run-shell", filepath.Join(pluginRoot, "agent-herd.tmux"))
 	keys := e.tmux("list-keys", "-T", "prefix")
-	if !strings.Contains(keys, "mode --client") {
+	if !strings.Contains(keys, "mode --open --client") {
 		t.Errorf("herd mode binding missing:\n%s", keys)
 	}
 	for _, k := range []string{"jump blocked", "jump done", "sidebar --toggle"} {
@@ -950,7 +950,7 @@ func TestNeverClobbersBindings(t *testing.T) {
 	// Choosing a free key binds it.
 	e.tmux("set-option", "-g", "@herd-key", "H")
 	e.tmux("run-shell", filepath.Join(pluginRoot, "agent-herd.tmux"))
-	if k := e.binding("H"); !strings.Contains(k, "mode --client") {
+	if k := e.binding("H"); !strings.Contains(k, "mode --open --client") {
 		t.Errorf("prefix+H not bound to herd mode: %s", k)
 	}
 	if c := strings.TrimSpace(e.tmux("show-option", "-gqv", "@herd_conflicts")); c != "" {
