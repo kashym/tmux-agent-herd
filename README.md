@@ -34,7 +34,7 @@ Linux and macOS.
 Inspired by [herdr](https://github.com/ogulcancelik/herdr), which builds agent
 awareness into its own multiplexer. tmux-agent-herd brings the same idea to
 the tmux you already have: your sessions, config, plugins, SSH workflow and
-muscle memory stay exactly as they are.
+muscle memory stay exactly as they are. ([Why not just use herdr?](#why-not-just-use-herdr))
 
 ## Install
 
@@ -131,6 +131,32 @@ set -g @herd-sidebar on        # start pinned: a sidebar in every window
 - **Auditable and removable.** `herd doctor` lists every key, hook, option and
   file herd touched. `herd setup --remove all` and `install.sh --uninstall`
   take it all back out.
+
+## Why not just use herdr?
+
+[herdr](https://github.com/ogulcancelik/herdr) is excellent, and if you're
+happy to switch multiplexers it's well worth a look: its whole interface is
+designed around agents from the ground up.
+
+tmux-agent-herd is for people who would rather not switch:
+
+- **You live in tmux.** Your config, key bindings, plugins and muscle memory
+  keep working. herd adds one key.
+- **Your sessions are already there.** Long-running sessions on a server, over
+  SSH, attached from several terminals: nothing to migrate or restart. Load
+  the plugin into a running tmux and the agent panes you already have light up.
+- **It composes.** Agent state is plain tmux options plus a scriptable CLI, so
+  it fits into your status line, your theme and your own scripts.
+
+| | herdr | tmux-agent-herd |
+| --- | --- | --- |
+| What it is | A terminal multiplexer built for agents | A plugin for the tmux you already run |
+| Sessions, windows, panes, detach | herdr's own | tmux's |
+| Agent overview | Built into the interface | Herd mode on one key, or pinned sidebars in every window |
+| Getting started | Install herdr and run your agents inside it | Add one TPM line |
+
+It isn't a competition. Many of the ideas here came from herdr, and if you use
+both, we'd love to hear what herdr does better.
 
 ## Supported agent CLIs
 
