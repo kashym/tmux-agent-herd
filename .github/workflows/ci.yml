@@ -23,6 +23,19 @@ jobs:
       - run: go vet ./...
       - run: go test -count=1 ./...
       - run: shellcheck install.sh agent-herd.tmux scripts/herd-hook scripts/install-binary.sh
+  test-tmux-3-2:
+    # Ubuntu 22.04 ships tmux 3.2a. Not required yet: tells us whether the
+    # 3.3 minimum can be lowered.
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: sudo apt-get update && sudo apt-get install -y tmux
+      - run: tmux -V
+      - run: go test -count=1 -short ./...
   test-macos:
     # Unit tests + build. The integration tests use a bash fake agent whose
     # process name macOS reports differently, so they run on Linux only.

@@ -36,6 +36,8 @@ Drive:
   close <pane> [--any-session]
 
 UI (bound to keys by the plugin):
+  mode [--client C]                      herd mode: the dashboard as a popup (prefix + a)
+  mode --pin on|off|toggle               keep a sidebar in every window
   pick [--client C]                      fzf picker of agent panes
   jump blocked|done [--client C]         go to the oldest blocked / unseen done pane
   sidebar [--toggle|--ensure] [--window W] [--width N]   live agent sidebar pane
@@ -44,6 +46,8 @@ Setup:
   setup <harness...|all> [--yes]         connect an agent harness to herd (shows a diff, asks first)
   setup --list                           supported harnesses: claude codex gemini copilot opencode pi aider
   setup --remove <harness...|all>        take herd back out of a harness's config
+  setup --print <harness>                print the config instead of writing it (dotfiles, Nix)
+  doctor                                 show everything herd changed and anything wrong
   install-skill [harness...|all] [--remove]   copy (or remove) the herd skill in each harness's skills dir
   daemon [--ensure] [--stop]             run (or make sure one is running) herdd
   hook [--agent A] [--msg M] [--kind K] [state]   used by scripts/herd-hook
@@ -142,6 +146,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = cmdPrompt(g, rest)
 	case "jump":
 		err = cmdJump(g, rest)
+	case "doctor":
+		err = cmdDoctor(g, rest, stdout)
+	case "_welcome":
+		err = cmdWelcome(g, rest)
+	case "mode":
+		err = cmdMode(g, rest, stdout)
 	case "sidebar":
 		err = cmdSidebar(g, rest, stdout)
 	case "setup":

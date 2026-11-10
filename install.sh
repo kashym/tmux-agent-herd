@@ -192,7 +192,12 @@ else
 		line="run-shell '$DIR/agent-herd.tmux'"
 		info "adding: $line"
 	fi
-	if ask "Edit $CONF?" y; then
+	conf_target="$CONF"
+	[ -L "$CONF" ] && conf_target="$(readlink -f "$CONF" 2>/dev/null || echo "$CONF")"
+	if [ -e "$conf_target" ] && [ ! -w "$conf_target" ]; then
+		warn "$CONF is read-only (managed by Nix/home-manager or similar)."
+		warn "Add this line to your tmux config yourself: $line"
+	elif ask "Edit $CONF?" y; then
 		mkdir -p "$(dirname "$CONF")"
 		backup "$CONF"
 		touch "$CONF"
@@ -221,6 +226,7 @@ if [ "$AGENTS" = 1 ]; then
 	"$HERD" setup --list | sed 's/^/    /'
 	if "$HERD" setup --list | awk 'NR>1 && $2=="yes" {f=1} END {exit !f}'; then
 		info "Each change below is shown as a diff and needs a yes; files are backed up."
+		info "(Configs managed by dotfiles/Nix? Answer no and use: herd setup --print <name>)"
 		if [ "$YES" = 1 ]; then "$HERD" setup all --yes || warn "some harnesses failed; see above"; else "$HERD" setup all || warn "some harnesses failed; see above"; fi
 	else
 		info "no supported agent CLI found; screen detection still works. Run 'herd setup <name>' later."
@@ -238,12 +244,12 @@ fi
 
 step "Done"
 cat <<EOF
-    In tmux:
-      prefix + a    pick an agent (blocked ones first)
-      prefix + B    jump to the agent waiting on you
-      prefix + D    jump to the agent that just finished
+    In tmux, press  prefix + a  for herd mode: every agent, the ones that
+    need you first. Enter jumps there, / filters, p pins a sidebar to every
+    window, Esc closes. (If prefix + a was taken, herd left it alone: set
+    @herd-key to another key.)
 
-    From any pane:  herd ls        herd help
+    See what herd changed:  herd doctor        All commands:  herd help
     Uninstall:      bash $DIR/install.sh --uninstall
 
     New panes have 'herd' on PATH; in older ones use $HERD

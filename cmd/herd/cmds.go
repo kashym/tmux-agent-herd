@@ -327,6 +327,7 @@ func cmdSetup(g *globals, args []string, stdout io.Writer) error {
 	yes := fs.Bool("yes", false, "apply without asking")
 	list := fs.Bool("list", false, "show supported harnesses and their status")
 	remove := fs.Bool("remove", false, "take herd back out of the harness config")
+	printOnly := fs.Bool("print", false, "print what herd would add instead of writing it")
 	hp := fs.String("hook-path", hookPath(), "path to herd-hook")
 	pos, err := parseFlags(fs, args)
 	if err != nil {
@@ -371,6 +372,9 @@ func cmdSetup(g *globals, args []string, stdout io.Writer) error {
 		run := setupOne
 		if *remove {
 			run = removeOne
+		}
+		if *printOnly {
+			run = printOne
 		}
 		if err := run(h, *hp, *yes, stdout); err != nil {
 			fmt.Fprintf(stdout, "%s: %v\n", h.Title, err)
@@ -446,6 +450,25 @@ func setupOne(h *harness.Harness, hp string, yes bool, stdout io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(stdout, "Updated %s. %s\n", tildify(path), h.Note)
+	return nil
+}
+
+// printOne prints the file herd would write, for configs managed by
+// dotfiles or Nix, where herd should not write itself.
+func printOne(h *harness.Harness, hp string, _ bool, stdout io.Writer) error {
+	old, next, err := h.Plan(pluginDir(), hp)
+	if err != nil {
+		return err
+	}
+	if old != nil && bytes.Equal(old, next) {
+		fmt.Fprintf(stdout, "# %s: herd is already set up in %s\n", h.Title, tildify(h.Target()))
+		return nil
+	}
+	fmt.Fprintf(stdout, "# %s: %s should contain:\n", h.Title, tildify(h.Target()))
+	stdout.Write(next)
+	if old != nil {
+		fmt.Fprintln(stdout, "# (your existing settings are merged in above; copy only the herd entries if you prefer)")
+	}
 	return nil
 }
 
@@ -544,6 +567,10 @@ func cmdInstallSkill(g *globals, args []string, stdout io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("skill not found: %w", err)
 	}
+	// Point the skill at this exact binary: `herd` may be missing from PATH
+	// or be another program (Laravel Herd also ships a `herd` command).
+	data = []byte(strings.Replace(string(data), "<!-- herd-bin -->",
+		"On this machine the CLI is `"+selfExe()+"`; use that path if `herd` is not found or is a different program.", 1))
 	var dirs []string
 	switch {
 	case *dir != "":

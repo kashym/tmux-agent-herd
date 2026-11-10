@@ -8,16 +8,16 @@
 
 You run Claude Code in one pane, Codex in another, pi in a third. One is
 waiting for permission, one finished ten minutes ago, one is still working, and
-you only find out by flipping through panes. tmux-agent-herd puts every
-agent's state in your status line, sends a desktop notification when one needs
-you, and takes you to it with one key.
+you only find out by flipping through panes. tmux-agent-herd gives tmux
+agent awareness: every agent's state in your status line, a notification when
+one needs you, and **one key** that shows them all and takes you there.
 
 ```
  herd               ●1 ✗1 ◐2 ✓1  │
 ──────────────────────────────── │
  SESSIONS                        │
-  ✗ side                      2  │   your agents and shells,
-▍ ● work                      3  │   as usual
+  ✗ side                      2  │   your panes, untouched
+▍ ● work                      3  │
                                  │
  AGENTS 5                        │
   ● codex · permission       1m  │
@@ -27,91 +27,117 @@ you, and takes you to it with one key.
   ✓ pi                       2m  │
   ◐ claude                  14s  │
     work:0.2 · Edit              │
- ⏎ go  s send  x kill  q         │
+ ⏎ go  / find  s send  p pin  esc│
 
 status line   ● 1 blocked  ◐ 2 working  ✓ 1 done
-window list   ● 1:api   ◐ 2:web   ✓ 3:docs   4:notes
 ```
 
 Works with **Claude Code, Codex CLI, Gemini CLI, GitHub Copilot CLI, OpenCode,
-pi and aider**, and anything else that can run a script. Plain tmux, Linux and
-macOS, no tmux patches.
+pi and aider**, and anything else that can run a script. Plain tmux 3.3+,
+Linux and macOS.
 
-<!-- TODO: add demo.gif here (see "Recording a demo" in CONTRIBUTING.md) -->
+Inspired by [herdr](https://github.com/ogulcancelik/herdr), which builds agent
+awareness into its own multiplexer. tmux-agent-herd brings the same idea to
+the tmux you already have: your sessions, config, plugins, SSH workflow and
+muscle memory stay exactly as they are.
+
+<!-- TODO: add demo.gif here (scripts/demo.sh sets up the scene) -->
 
 ## Install
+
+With [TPM](https://github.com/tmux-plugins/tpm):
+
+```tmux
+set -g @plugin 'kashym/tmux-agent-herd'
+```
+
+Press `prefix + I`. The `herd` binary is downloaded (checksum-verified) for
+your platform, or built from source if Go is available and no release matches.
+
+Then connect your agent CLIs, from any pane:
+
+```sh
+herd setup all       # shows each change as a diff and asks first; backs up files
+herd install-skill   # optional: lets your agents use herd themselves
+```
+
+<details>
+<summary>Without TPM: one script does everything</summary>
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/kashym/tmux-agent-herd/main/install.sh | bash
 ```
 
-That one command:
-
-1. checks you have tmux 3.3+ and git,
-2. downloads the plugin to `~/.tmux/plugins/tmux-agent-herd` and its `herd` binary,
-3. adds one line to your tmux config (a TPM `@plugin` line if you use TPM) and loads it into running tmux,
-4. finds the agent CLIs you have installed and connects each one, **showing you the exact change first** and backing up every file it edits,
-5. optionally installs a skill so your agents can use herd themselves.
-
-Nothing changes without a yes. Prefer to read the script first? Download it,
-read it, and run `bash install.sh` (`--help` for options, `--yes` for no
-questions).
-
-<details>
-<summary>Install with TPM instead</summary>
-
-```tmux
-set -g @plugin 'tmux-plugins/tpm'
-set -g @plugin 'kashym/tmux-agent-herd'
-```
-
-Press `prefix + I`, then connect your agents from any tmux pane:
-
-```sh
-herd setup all       # shows each change as a diff and asks first
-herd install-skill   # optional
-```
+It checks tmux and git, clones the plugin to `~/.tmux/plugins/`, adds one line
+to your tmux config, connects the agent CLIs it finds and offers the skill.
+Every change needs a yes and edited files are backed up. Read it first if you
+like (`--help` for options); `--uninstall` undoes it.
 </details>
 
-**Requirements:** tmux 3.3 or newer, git, Linux or macOS. `fzf` is optional
-(nicer picker). Prebuilt binaries are downloaded automatically; Go is only
-needed if no release exists for your platform.
+<details>
+<summary>Dotfiles or Nix-managed configs</summary>
+
+`herd setup --print <name>` prints what herd would add to an agent CLI's
+config instead of writing it, so you can put it in your dotfiles. The installer
+never writes to a read-only tmux config; it tells you the line to add.
+</details>
 
 ## Use it
 
-| Key | What it does |
+Press **`prefix + a`** for **herd mode**: a dashboard docked on the left of
+your screen as a popup, so your layout and pane numbers never change.
+
+| In herd mode | |
 | --- | --- |
-| `prefix + a` | Picker: all agents, the ones that need you first, with a live preview. `enter` go there, `ctrl-r` send a prompt, `ctrl-x` kill |
-| `prefix + B` | Jump to the agent that has been **blocked** longest |
-| `prefix + D` | Jump to the agent that **finished** and you haven't looked at yet |
-| `prefix + S` | Toggle the **sidebar** in this window |
-
-### Sidebar
-
-A live dashboard pane down the left of the window: every session with its
-most urgent state, and every agent sorted by who needs you first, with where
-it is and what it's waiting on. Click a row or use `j`/`k` and `Enter` to
-jump there; `s` sends a prompt, `x` kills the pane, `B`/`D` jump to the next
-blocked/done agent, `q` closes it.
-
-To keep it open in every window (closer to a dedicated agent multiplexer),
-add `set -g @herd-sidebar on` to your tmux config. It uses 32 columns
-(`@herd-sidebar-width`) and closes itself when the rest of its window does.
+| `j` `k` / click | move |
+| `Enter` | go to that agent (or session) and close |
+| `B` `D` | go to the next **blocked** / **done** agent |
+| `/` | filter by agent, session, path or message |
+| `s` | type a prompt and send it to the agent |
+| `x` | kill the agent's pane |
+| `p` | **pin**: keep a sidebar in every window, herdr-style (`p` again unpins) |
+| `Esc` `q` | close |
 
 | State | Meaning |
 | --- | --- |
 | `●` **blocked** | waiting for you: a permission prompt, a question, or a login |
 | `◐` **working** | busy |
-| `✓` **done** | finished its turn and you haven't looked yet. Turns into idle once you focus the pane |
-| `✗` **error** | the last turn failed (e.g. the provider returned an error) |
+| `✓` **done** | finished and you haven't looked yet. Turns into idle when you focus it |
+| `✗` **error** | the last turn failed, e.g. the provider returned an error |
 | `○` **idle** | waiting for a new prompt |
 
-You get a desktop notification when an agent you're not looking at becomes
-blocked or done (at most one per pane every 30 s).
+The status line shows the counts, window names get a dot with their most
+urgent state, and you get a desktop notification when an agent you're not
+looking at becomes blocked or done (at most one per pane every 30 s).
 
-Panes running an agent are detected automatically. Connecting the agent's own
-hooks (step 4 of the installer, or `herd setup`) makes the state exact and
-instant. Without hooks herd falls back to reading the screen.
+**Prefer direct keys?** All are off by default and only ever bound if free:
+
+```tmux
+set -g @herd-blocked-key 'B'   # jump to the agent waiting on you
+set -g @herd-done-key 'D'      # jump to the agent that just finished
+set -g @herd-sidebar-key 'S'   # toggle a sidebar pane in this window
+set -g @herd-sidebar on        # start pinned: a sidebar in every window
+```
+
+## A good tmux citizen
+
+- **Binds one key, and never one you use.** If `prefix + a` is already bound
+  (say `send-prefix` with a `C-a` prefix), herd leaves it alone, tells you once,
+  and you pick another with `@herd-key`.
+- **Your status line, your call.** Put `#{herd}` in `status-left` or
+  `status-right` and `#{herd_badge}` in your window formats, and herd fills in
+  exactly those. Without placeholders it appends to `status-right` and puts a
+  dot in front of window names (`@herd-status off`, `@herd-window-badge off`).
+- **State is plain tmux.** Every pane gets `@herd_state`, `@herd_agent` and
+  `@herd_msg` options, and the global `@herd_status` is the summary: use them in
+  any format, theme or script.
+- **Cheap.** One small daemon per tmux server polls once a second, only looks
+  at agent panes, skips screens that didn't change, and writes options only on
+  change: under 1% CPU with 10 agents, nothing runs per status redraw. It exits
+  with the server.
+- **Auditable and removable.** `herd doctor` lists every key, hook, option and
+  file herd touched. `herd setup --remove all` and `install.sh --uninstall`
+  take it all back out.
 
 ## Supported agent CLIs
 
@@ -124,6 +150,9 @@ instant. Without hooks herd falls back to reading the screen.
 | OpenCode (`opencode`) | plugin `~/.config/opencode/plugins/herd.js` | working, blocked, done, error |
 | pi (`pi`) | extension `~/.pi/agent/extensions/herd.ts` | working, blocked, done, error |
 | aider (`aider`) | `notifications-command` in `~/.aider.conf.yml` | done (the rest from the screen) |
+
+Without setup, agents are still detected from their process and screen; hooks
+make the state exact and instant.
 
 ```sh
 herd setup --list            # what's installed and what's connected
@@ -140,14 +169,14 @@ herd setup --remove all      # take herd back out
 ```
 
 It never prints and always exits 0, so it can't break your agent. Add the
-command name to `@herd-agents` so the pane is recognized before the first
-event, and [open an issue](https://github.com/kashym/tmux-agent-herd/issues/new?template=new_harness.yml)
+command name to `@herd-agents` and
+[open an issue](https://github.com/kashym/tmux-agent-herd/issues/new?template=new_harness.yml)
 so it can be supported out of the box.
 
 ## Let your agents run other agents
 
-`herd` is also a small, safe CLI that agents (and scripts) use to start
-workers in new panes, hand them tasks, and wait for results:
+`herd` is also a small, scriptable CLI (every command has `--json`) for
+starting workers in new panes, handing them tasks and waiting for results:
 
 ```sh
 herd run --name tests --right codex          # start an agent in a new pane
@@ -158,85 +187,72 @@ herd ls --json
 ```
 
 `herd install-skill` teaches this to every installed agent CLI that supports
-[Agent Skills](https://agentskills.io), so you can just ask your agent to "run
-these three tasks in parallel workers". Safety rails: agents can only type into
+[Agent Skills](https://agentskills.io). Safety rails: agents can only type into
 and close panes in their own tmux session, never close their own pane, and
-can't type into a working agent without `--force`.
-
-Run `herd help` for every command.
+can't type into a working agent without `--force`. Run `herd help` for
+everything.
 
 ## Configure
 
-Set these in your tmux config before the plugin line.
-
 | Option | Default | Effect |
 | --- | --- | --- |
+| `@herd-key` | `a` | Opens herd mode (`off` to disable). Skipped if already bound |
+| `@herd-mode-width` | `32` | Width of herd mode and sidebars |
+| `@herd-sidebar` | `off` | `on`: start pinned, a sidebar in every window |
+| `@herd-blocked-key` `@herd-done-key` `@herd-sidebar-key` `@herd-picker-key` | `off` | Optional direct keys (jump to blocked, jump to done, toggle sidebar, fzf picker) |
 | `@herd-agents` | `claude codex gemini copilot opencode pi aider` | Commands treated as agents |
-| `@herd-status` | `on` | Add the summary to `status-right` |
-| `@herd-window-badge` | `on` | Dot with the worst state in front of each window name |
+| `@herd-status` | `on` | Append the summary to `status-right` when you haven't placed `#{herd}` |
+| `@herd-window-badge` | `on` | Dot in front of window names when you haven't placed `#{herd_badge}` |
 | `@herd-border` | `off` | Agent, state and message in pane borders |
-| `@herd-picker-key` | `a` | Picker key (`off` to disable) |
-| `@herd-blocked-key` | `B` | Jump-to-blocked key |
-| `@herd-done-key` | `D` | Jump-to-done key (replaces tmux's default `choose-client` on `D`) |
-| `@herd-sidebar` | `off` | `on` keeps a sidebar in every window |
-| `@herd-sidebar-key` | `S` | Sidebar toggle key |
-| `@herd-sidebar-width` | `32` | Sidebar width in columns |
 | `@herd-notify` | `blocked,done` | States that notify (`off` to disable) |
-| `@herd-notify-cmd` | auto | Your own notifier, run as `sh -c "$cmd" herd <title> <body>` |
+| `@herd-notify-cmd` | auto | Your own notifier: `sh -c "$cmd" herd <title> <body>` |
+| `@herd-path` | `on` | Add the plugin's `bin/` to PATH for new panes (`$HERD_BIN` is always set) |
 | `@herd-poll-ms` | `1000` | Screen check interval |
 | `@herd-stale-after` | `600` | Seconds before a hook-reported state is distrusted |
 | `@herd-patterns-dir` | | Extra screen-pattern directory |
 
-Want the summary somewhere else? Set `@herd-status off` and put
-`#{E:@herd_status}` where you like. Each pane also has `@herd_state`,
-`@herd_agent` and `@herd_msg` options for your own formats.
-
 ## Uninstall
 
-```sh
-bash ~/.tmux/plugins/tmux-agent-herd/install.sh --uninstall
-```
-
-This removes herd from your agent CLIs' configs (with diffs and backups), the
-skill, the tmux config line and the plugin.
+TPM: remove the line and press `prefix + alt + u`, then run
+`herd setup --remove all` to take herd out of your agent CLIs. With the script:
+`bash ~/.tmux/plugins/tmux-agent-herd/install.sh --uninstall`.
 
 ## Troubleshooting
 
-- **Nothing in the status line.** A theme or plugin loaded after herd probably
-  overwrote `status-right`. Load herd last, or add `#{E:@herd_status}` to your
-  theme's `status-right` yourself.
-- **An agent pane isn't detected.** Check `herd ls` for its `COMMAND`, and add
-  that name to `@herd-agents`.
-- **States are wrong or late.** Run `herd setup --list` and connect that agent
-  CLI. For Codex, remember to trust the hooks with `/hooks`. Restart running
-  agent sessions after setup.
-- **`herd: command not found`.** Panes opened before the install don't have it
-  on PATH. Open a new pane, or use `~/.tmux/plugins/tmux-agent-herd/bin/herd`.
-- **Still stuck?** `herd log` shows every state change and where it came from,
-  and `~/.local/state/herd/herdd.log` has the daemon log. Please include both in
-  [a bug report](https://github.com/kashym/tmux-agent-herd/issues/new?template=bug_report.yml).
+Start with **`herd doctor`**: it shows what herd changed, whether the daemon
+runs, key conflicts and which agent CLIs are connected.
+
+- **`prefix + a` does nothing.** It was already bound, so herd left it alone
+  (doctor says so). Set `@herd-key` to a free key.
+- **Nothing in the status line.** A theme loaded after herd replaced
+  `status-right`. Put `#{herd}` in your theme's status line, or load herd last.
+- **An agent isn't detected.** Check `herd ls` for its `COMMAND` and add it to
+  `@herd-agents`.
+- **States are wrong or late.** Connect the agent CLI (`herd setup --list`);
+  for Codex, trust the hooks with `/hooks`. Restart running agent sessions.
+- **`herd: command not found`** in an old pane: open a new one, or use
+  `$HERD_BIN`. If `herd` is another program (Laravel Herd), the skill already
+  uses herd's absolute path.
+
+`herd log` shows every state change and its source; the daemon log is in
+`~/.local/state/herd/herdd.log`. Please include both in
+[a bug report](https://github.com/kashym/tmux-agent-herd/issues/new?template=bug_report.yml).
 
 ## How it works
 
-One small daemon per tmux server (`herdd`, part of the `herd` binary) keeps
-each pane's state, chosen from the most trustworthy source that reported
-recently:
-
-1. **Agent hooks and extensions** (`herd setup`), which report instantly.
-2. **Screen patterns**, a per-agent regex file in `patterns/` (claude, codex,
-   gemini, aider) checked once a second, only on agent panes and only when the
-   screen changed.
-3. **The process name**, which marks the pane as an idle agent.
-
-It writes the result into tmux pane options, which the status line reads, so
-nothing runs per redraw. It uses under 1% CPU with 10 agents. Every
-change is logged to `~/.local/state/herd/events.jsonl` (`herd log`). The
-[original design doc](docs/DESIGN.md) has the background.
+`herdd` (part of the `herd` binary, one per tmux server) keeps each pane's
+state, taken from the most trustworthy source that reported recently: agent
+hooks and extensions (instant), then per-agent screen patterns in
+`patterns/`, then the process name. It writes the result into tmux options,
+which your status line, herd mode and the sidebars read. Every change is logged
+to `~/.local/state/herd/events.jsonl`. Background: the
+[original design doc](docs/DESIGN.md).
 
 ## Contributing
 
 Issues and PRs are very welcome, especially **support for more agent CLIs**
-and **real screen captures** that improve detection. See
+and **real screen captures** that improve detection. `scripts/demo.sh` starts a
+throwaway tmux with fake agents to try changes. See
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

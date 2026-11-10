@@ -651,12 +651,15 @@ func TestSetupClaudeAndInstallSkill(t *testing.T) {
 // --- plugin entry point ---
 
 func TestPluginEntryPoint(t *testing.T) {
-	e := newEnv(t, "@herd-border", "on", "@herd-picker-key", "a")
+	e := newEnv(t, "@herd-border", "on")
 	e.tmux("run-shell", filepath.Join(pluginRoot, "agent-herd.tmux"))
 	keys := e.tmux("list-keys", "-T", "prefix")
-	for _, k := range []string{"display-popup", "jump blocked", "jump done"} {
-		if !strings.Contains(keys, k) {
-			t.Errorf("binding %q missing", k)
+	if !strings.Contains(keys, "mode --client") {
+		t.Errorf("herd mode binding missing:\n%s", keys)
+	}
+	for _, k := range []string{"jump blocked", "jump done", "sidebar --toggle"} {
+		if strings.Contains(keys, k) {
+			t.Errorf("%q should not be bound by default", k)
 		}
 	}
 	if sr := e.tmux("show-option", "-gv", "status-right"); !strings.Contains(sr, "#{E:@herd_status}") {
@@ -907,4 +910,149 @@ func TestSidebarAlwaysOn(t *testing.T) {
 		}
 		return ""
 	})
+}
+
+// --- tmux citizenship ---
+
+func TestNeverClobbersBindings(t *testing.T) {
+	e := newEnv(t)
+	// A C-a user's classic setup, plus a binding left by an older herd.
+	e.tmux("set-option", "-g", "prefix", "C-a")
+	e.tmux("bind-key", "a", "send-prefix")
+	e.tmux("bind-key", "D", "run-shell", "/old/plugin/bin/herd jump done")
+	e.tmux("run-shell", filepath.Join(pluginRoot, "agent-herd.tmux"))
+
+	if k := e.tmux("list-keys", "-T", "prefix", "a"); !strings.Contains(k, "send-prefix") {
+		t.Errorf("prefix+a was taken over: %s", k)
+	}
+	if c := strings.TrimSpace(e.tmux("show-option", "-gqv", "@herd_conflicts")); c != "prefix+a" {
+		t.Errorf("@herd_conflicts = %q", c)
+	}
+	if k := e.tmux("list-keys", "-T", "prefix", "D"); !strings.Contains(k, "choose-client") {
+		t.Errorf("old herd binding on D should give way to tmux's default: %s", k)
+	}
+	// Choosing a free key binds it.
+	e.tmux("set-option", "-g", "@herd-key", "H")
+	e.tmux("run-shell", filepath.Join(pluginRoot, "agent-herd.tmux"))
+	if k := e.tmux("list-keys", "-T", "prefix", "H"); !strings.Contains(k, "mode --client") {
+		t.Errorf("prefix+H not bound to herd mode: %s", k)
+	}
+	if c := strings.TrimSpace(e.tmux("show-option", "-gqv", "@herd_conflicts")); c != "" {
+		t.Errorf("conflicts should be empty now: %q", c)
+	}
+	out := e.herd("doctor")
+	for _, want := range []string{"bound prefix+H → herd mode", "herdd", "running"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestStatusPlaceholders(t *testing.T) {
+	e := newEnv(t)
+	e.tmux("set-option", "-g", "status-right", "#{herd} | %H:%M")
+	e.tmux("set-option", "-g", "window-status-format", "#{herd_badge}#I:#W")
+	e.tmux("run-shell", filepath.Join(pluginRoot, "agent-herd.tmux"))
+	sr := strings.TrimSpace(e.tmux("show-option", "-gv", "status-right"))
+	if strings.Contains(sr, "#{herd}") || strings.Count(sr, "@herd_status") != 2 || !strings.HasSuffix(sr, "| %H:%M") {
+		t.Errorf("status-right = %q", sr)
+	}
+	if m := strings.TrimSpace(e.tmux("show-option", "-gqv", "@herd_status_mode")); m != "placeholder" {
+		t.Errorf("status mode %q", m)
+	}
+	wf := strings.TrimSpace(e.tmux("show-option", "-gv", "window-status-format"))
+	if strings.Contains(wf, "#{herd_badge}") || !strings.HasSuffix(wf, "#I:#W") {
+		t.Errorf("window-status-format = %q", wf)
+	}
+	// Current-window format had no placeholder and must stay untouched.
+	if cf := e.tmux("show-option", "-gv", "window-status-current-format"); strings.Contains(cf, "herd") {
+		t.Errorf("current format touched: %q", cf)
+	}
+	// @herd-path off leaves PATH alone.
+	e2 := newEnv(t, "@herd-path", "off")
+	e2.tmux("run-shell", filepath.Join(pluginRoot, "agent-herd.tmux"))
+	if env := e2.tmux("show-environment", "-g", "PATH"); strings.Contains(env, filepath.Join(pluginRoot, "bin")) {
+		t.Error("PATH changed despite @herd-path off")
+	}
+}
+
+func TestHerdModeUIAndPin(t *testing.T) {
+	e := newEnv(t)
+	e.startDaemon()
+	a := e.fakeNamed("codex", filepath.Join(e.home, "a"), "claude/idle-fresh.txt")
+	b := e.fakeNamed("pi", filepath.Join(e.home, "b"), "claude/idle-fresh.txt")
+	e.waitState(a, "idle", 3*time.Second)
+	e.waitState(b, "idle", 3*time.Second)
+	e.hookArgs(a, "--agent", "codex", "--msg", "Bash: ls", "--kind", "permission", "blocked")
+
+	// The popup UI is the same program; run it in a window of its own.
+	ui := strings.TrimSpace(e.tmux("new-window", "-d", "-P", "-F", "#{pane_id}", e.herdB+" -L "+e.name+" mode"))
+	e.eventually(3*time.Second, func() string {
+		if s := e.tmux("capture-pane", "-p", "-t", ui); !strings.Contains(s, "AGENTS 2") || !strings.Contains(s, "esc") {
+			return "mode UI not drawn:\n" + s
+		}
+		return ""
+	})
+	// Filter to pi, accept, jump: the UI exits and pi is focused.
+	e.tmux("send-keys", "-t", ui, "/")
+	e.tmux("send-keys", "-t", ui, "-l", "pi")
+	e.tmux("send-keys", "-t", ui, "Enter")
+	e.eventually(2*time.Second, func() string {
+		if s := e.tmux("capture-pane", "-p", "-t", ui); !strings.Contains(s, "AGENTS 1") {
+			return "filter not applied:\n" + s
+		}
+		return ""
+	})
+	e.tmux("send-keys", "-t", ui, "Enter")
+	e.eventually(3*time.Second, func() string {
+		if cur := e.opt("main:0", "#{pane_id}"); cur != b {
+			return "active " + cur + " want " + b
+		}
+		if strings.Contains(e.tmux("list-panes", "-a", "-F", "#{pane_id}"), ui+"\n") {
+			return "mode UI should exit after jumping"
+		}
+		return ""
+	})
+
+	// Pin: a sidebar in every window, and in new ones; unpin removes them.
+	e.tmux("new-window", "-d")
+	e.herd("mode", "--pin", "on")
+	windows := strings.Fields(e.tmux("list-windows", "-a", "-F", "#{window_id}"))
+	for _, w := range windows {
+		if e.sidebarPane(w) == "" {
+			t.Errorf("window %s has no sidebar after pin", w)
+		}
+	}
+	nw := strings.TrimSpace(e.tmux("new-window", "-d", "-P", "-F", "#{window_id}"))
+	e.eventually(3*time.Second, func() string {
+		if e.sidebarPane(nw) == "" {
+			return "new window has no sidebar"
+		}
+		return ""
+	})
+	if out := e.herd("mode", "--pin", "toggle"); !strings.Contains(out, "unpinned") {
+		t.Errorf("toggle output %q", out)
+	}
+	if strings.Contains(e.tmux("list-panes", "-a", "-F", "#{@herd_sidebar}"), "1") {
+		t.Error("sidebars left after unpin")
+	}
+}
+
+func TestSetupPrintWritesNothing(t *testing.T) {
+	e := newEnv(t)
+	out := e.herd("setup", "--print", "codex", "pi")
+	if !strings.Contains(out, "hooks.json should contain") || !strings.Contains(out, "--agent codex working") || !strings.Contains(out, `"--agent", "pi"`) {
+		t.Errorf("print output:\n%s", out)
+	}
+	for _, f := range []string{".codex/hooks.json", ".pi/agent/extensions/herd.ts"} {
+		if _, err := os.Stat(filepath.Join(e.home, f)); err == nil {
+			t.Errorf("%s was written", f)
+		}
+	}
+	// The installed skill names this exact binary.
+	e.herd("install-skill", "claude")
+	b, _ := os.ReadFile(filepath.Join(e.home, ".claude", "skills", "herd", "SKILL.md"))
+	if !strings.Contains(string(b), e.herdB) || strings.Contains(string(b), "<!-- herd-bin -->") {
+		t.Errorf("skill does not carry the binary path:\n%s", b[:min(len(b), 600)])
+	}
 }

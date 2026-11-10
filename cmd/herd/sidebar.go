@@ -35,7 +35,7 @@ func cmdSidebar(g *globals, args []string, stdout io.Writer) error {
 	if *toggle || *ensure {
 		return sidebarPane(g, *window, *width, *toggle)
 	}
-	return runSidebar(g)
+	return runSidebar(g, false, "")
 }
 
 // sidebarPane finds the sidebar pane in a window and toggles/ensures it.
@@ -96,7 +96,12 @@ type sidebar struct {
 	sel     int
 	offset  int
 	rowAt   map[int]int // screen line -> item index
-	mode    string      // "", "send", "kill"
+	mode    string      // "", "send", "kill", "filter"
+	popup   bool        // herd mode: a popup that closes after an action
+	client  string      // tmux client to act on (popup)
+	filter  string
+	quit    bool
+	mySess  string
 	input   []rune
 	flash   string
 	flashAt time.Time
@@ -125,7 +130,7 @@ func glyph(s state.State) string {
 	return " "
 }
 
-func runSidebar(g *globals) error {
+func runSidebar(g *globals, popup bool, client string) error {
 	fd := int(os.Stdin.Fd())
 	if !term.IsTerminal(fd) {
 		return errors.New("herd sidebar needs a terminal (open it with: herd sidebar --toggle)")
@@ -142,7 +147,17 @@ func runSidebar(g *globals) error {
 	}
 	defer restore()
 
-	sb := &sidebar{g: g, self: os.Getenv("TMUX_PANE"), rowAt: map[int]int{}}
+	sb := &sidebar{g: g, self: os.Getenv("TMUX_PANE"), rowAt: map[int]int{}, popup: popup, client: client}
+	if popup {
+		sb.self = ""
+		args := []string{"display-message", "-p"}
+		if client != "" {
+			args = append(args, "-c", client)
+		}
+		if out, err := g.tc.Run(append(args, "#{session_name}")...); err == nil {
+			sb.mySess = strings.TrimSpace(out)
+		}
+	}
 	if sb.self != "" {
 		_, _ = g.tc.Run("set-option", "-p", "-t", sb.self, "@herd_sidebar", "1", ";", "select-pane", "-t", sb.self, "-T", "herd")
 	}
@@ -172,7 +187,7 @@ func runSidebar(g *globals) error {
 	for {
 		select {
 		case b, ok := <-keys:
-			if !ok || !sb.handle(b) {
+			if !ok || !sb.handle(b) || sb.quit {
 				return nil
 			}
 		case s := <-sigs:
@@ -214,7 +229,7 @@ func (sb *sidebar) refresh() bool {
 			me = &sb.panes[i]
 		}
 	}
-	if me != nil {
+	if me != nil && !sb.popup {
 		n := 0
 		for _, p := range sb.panes {
 			if p.Session == me.Session && p.Window == me.Window {
@@ -244,12 +259,21 @@ func (sb *sidebar) buildItems() {
 		}
 	}
 	sort.Strings(sessions)
+	f := strings.ToLower(sb.filter)
+	match := func(parts ...string) bool {
+		if f == "" {
+			return true
+		}
+		return strings.Contains(strings.ToLower(strings.Join(parts, " ")), f)
+	}
 	for _, s := range sessions {
-		sb.items = append(sb.items, sbItem{session: s})
+		if match(s) {
+			sb.items = append(sb.items, sbItem{session: s})
+		}
 	}
 	var agents []api.Pane
 	for _, p := range sb.panes {
-		if p.State != state.None {
+		if p.State != state.None && match(p.Agent, p.Target(), p.Msg, string(p.State), p.Cwd) {
 			agents = append(agents, p)
 		}
 	}
@@ -334,6 +358,28 @@ func (sb *sidebar) handleOne(b []byte) (int, bool) {
 	switch b[0] {
 	case 'q', 0x03:
 		return 1, false
+	case 0x1b: // lone Esc
+		if sb.filter != "" {
+			sb.filter = ""
+			sb.buildItems()
+		} else if sb.popup {
+			return 1, false
+		}
+	case '/':
+		sb.mode = "filter"
+	case 'p':
+		on, err := togglePinned(sb.g)
+		switch {
+		case err != nil:
+			sb.say(err.Error())
+		case on:
+			sb.say("herd mode pinned: a sidebar in every window")
+		default:
+			sb.say("herd mode unpinned")
+		}
+		if sb.popup || !on {
+			return 1, false // popup closes; an unpinned sidebar pane is gone anyway
+		}
 	case 'j':
 		sb.move(1)
 	case 'k':
@@ -369,6 +415,38 @@ func (sb *sidebar) handleMode(b []byte) (int, bool) {
 			}
 		}
 		sb.mode = ""
+		return 1, true
+	}
+	if sb.mode == "filter" {
+		switch {
+		case b[0] == 0x1b && len(b) == 1, b[0] == 0x03:
+			sb.mode, sb.filter = "", ""
+		case b[0] == 0x1b:
+			return len(b), true
+		case b[0] == '\r' || b[0] == '\n':
+			sb.mode = ""
+			if len(sb.items) > 0 {
+				sb.sel = 0
+				for i, it := range sb.items {
+					if it.pane != nil { // prefer the first matching agent
+						sb.sel = i
+						break
+					}
+				}
+			}
+		case b[0] == 0x7f || b[0] == 0x08:
+			if r := []rune(sb.filter); len(r) > 0 {
+				sb.filter = string(r[:len(r)-1])
+			}
+		default:
+			r, size := utf8.DecodeRune(b)
+			if r >= 0x20 {
+				sb.filter += string(r)
+			}
+			sb.buildItems()
+			return size, true
+		}
+		sb.buildItems()
 		return 1, true
 	}
 	// send mode: a tiny line editor
@@ -430,14 +508,22 @@ func (sb *sidebar) activate() {
 		return
 	}
 	if it.pane != nil {
-		if err := focusPane(sb.g, it.pane.PaneID, ""); err != nil {
+		if err := focusPane(sb.g, it.pane.PaneID, sb.client); err != nil {
 			sb.say(err.Error())
+			return
 		}
+		sb.quit = sb.popup
 		return
 	}
-	if _, err := sb.g.tc.Run("switch-client", "-t", it.session); err != nil {
-		sb.say("can't switch: " + it.session)
+	args := []string{"switch-client"}
+	if sb.client != "" {
+		args = append(args, "-c", sb.client)
 	}
+	if _, err := sb.g.tc.Run(append(args, "-t", it.session)...); err != nil {
+		sb.say("can't switch: " + it.session)
+		return
+	}
+	sb.quit = sb.popup
 }
 
 func (sb *sidebar) say(msg string) { sb.flash, sb.flashAt = msg, time.Now() }
@@ -497,7 +583,7 @@ func (sb *sidebar) draw(out io.Writer) {
 	add(&head, ansiDim+strings.Repeat("─", w)+ansiReset, -1)
 
 	// Sessions.
-	mySession := ""
+	mySession := sb.mySess
 	for _, p := range sb.panes {
 		if p.PaneID == sb.self {
 			mySession = p.Session
@@ -559,7 +645,11 @@ func (sb *sidebar) draw(out io.Writer) {
 	}
 
 	// Footer.
-	footer := ansiDim + fit(" ⏎ go  s send  x kill  q", w) + ansiReset
+	help := " ⏎ go  / find  s send  x kill  p pin"
+	if sb.popup {
+		help = " ⏎ go  / find  s send  p pin  esc"
+	}
+	footer := ansiDim + fit(help, w) + ansiReset
 	switch {
 	case sb.mode == "send":
 		prompt := " > " + string(sb.input)
@@ -570,6 +660,8 @@ func (sb *sidebar) draw(out io.Writer) {
 		footer = ansiBold + fit(prompt+"▏", w) + ansiReset
 	case sb.mode == "kill":
 		footer = "\x1b[31m" + fit(" kill this pane? y/n", w) + ansiReset
+	case sb.mode == "filter" || sb.filter != "":
+		footer = ansiBold + fit(" / "+sb.filter+map[bool]string{true: "▏", false: ""}[sb.mode == "filter"], w) + ansiReset
 	case sb.err != "":
 		footer = "\x1b[31m" + fit(" "+sb.err, w) + ansiReset
 	case sb.flash != "" && time.Since(sb.flashAt) < 3*time.Second:

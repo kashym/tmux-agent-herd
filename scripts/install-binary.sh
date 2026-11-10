@@ -21,20 +21,48 @@ x86_64 | amd64) arch=amd64 ;;
 aarch64 | arm64) arch=arm64 ;;
 esac
 
-download() {
-	[ -n "$REPO" ] || return 1
-	local url="https://github.com/$REPO/releases/download/v$VERSION/herd_${VERSION}_${os}_${arch}.tar.gz"
-	local tmp
-	tmp="$(mktemp -d)"
-	trap 'rm -rf "$tmp"' RETURN
+fetch() { # fetch URL FILE
 	if command -v curl >/dev/null; then
-		curl -fsSL "$url" -o "$tmp/herd.tgz" || return 1
+		curl -fsSL "$1" -o "$2"
 	elif command -v wget >/dev/null; then
-		wget -q "$url" -O "$tmp/herd.tgz" || return 1
+		wget -q "$1" -O "$2"
 	else
 		return 1
 	fi
-	tar -xzf "$tmp/herd.tgz" -C "$tmp" herd || return 1
+}
+
+sha256() {
+	if command -v sha256sum >/dev/null; then
+		sha256sum "$1" | awk '{print $1}'
+	elif command -v shasum >/dev/null; then
+		shasum -a 256 "$1" | awk '{print $1}'
+	else
+		return 1
+	fi
+}
+
+download() {
+	[ -n "$REPO" ] || return 1
+	local base="https://github.com/$REPO/releases/download/v$VERSION"
+	local asset="herd_${VERSION}_${os}_${arch}.tar.gz"
+	local tmp want got
+	tmp="$(mktemp -d)"
+	trap 'rm -rf "$tmp"' RETURN
+	fetch "$base/$asset" "$tmp/$asset" || return 1
+	fetch "$base/checksums.txt" "$tmp/checksums.txt" || {
+		echo "tmux-agent-herd: no checksums for v$VERSION; not using the download" >&2
+		return 1
+	}
+	want="$(awk -v a="$asset" '$2 == a {print $1}' "$tmp/checksums.txt")"
+	got="$(sha256 "$tmp/$asset")" || {
+		echo "tmux-agent-herd: need sha256sum or shasum to verify the download" >&2
+		return 1
+	}
+	if [ -z "$want" ] || [ "$want" != "$got" ]; then
+		echo "tmux-agent-herd: checksum mismatch for $asset; not installing it" >&2
+		return 1
+	fi
+	tar -xzf "$tmp/$asset" -C "$tmp" herd || return 1
 	install -m 0755 "$tmp/herd" "$BIN"
 }
 

@@ -11,6 +11,8 @@ state: `idle`, `working`, `blocked` (needs a human: permission, question or
 auth), `done` (finished a turn, not yet looked at), `error`, or `none`
 (not an agent).
 
+<!-- herd-bin -->
+
 You must be running inside tmux (`$TMUX_PANE` is set). `send` and `close` only
 act on panes in your own tmux session unless you pass `--any-session`, and
 `close` never closes your own pane.

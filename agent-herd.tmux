@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # tmux-agent-herd: TPM entry point.
-# Reads @herd-* options, sets keybindings, hooks and formats, and starts one
-# herdd per tmux server (building/downloading the binary on first run).
+#
+# Principles: bind one key (and never one that is already taken), keep
+# state in @herd_* options for your own formats, only touch your status line
+# where you ask (#{herd}, #{herd_badge}) or by the documented default, and
+# record everything so `herd doctor` can show it.
 
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HERD="$CURRENT_DIR/bin/herd"
@@ -17,7 +20,10 @@ q() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
 is_on() { case "$1" in on|yes|true|1) return 0 ;; esac; return 1; }
 
 setup_path() {
-	# Let agents and scripts in new panes call `herd` directly.
+	# Let agents and scripts in new panes call `herd` directly (@herd-path off
+	# to skip; HERD_BIN always points at the binary).
+	tmux set-environment -g HERD_BIN "$HERD"
+	is_on "$(get_opt @herd-path on)" || return 0
 	local path
 	path="$(tmux show-environment -g PATH 2>/dev/null)"
 	path="${path#PATH=}"
@@ -27,74 +33,139 @@ setup_path() {
 	*":$CURRENT_DIR/bin:"*) ;;
 	*) tmux set-environment -g PATH "$path:$CURRENT_DIR/bin" ;;
 	esac
-	tmux set-environment -g HERD_BIN "$HERD"
+}
+
+# --- keys -------------------------------------------------------------------
+BOUND=()
+CONFLICTS=()
+
+key_owner() { tmux list-keys -T prefix "$1" 2>/dev/null | head -n 1; }
+
+# bind_herd KEY LABEL tmux-command...  — binds only if KEY is free or ours.
+bind_herd() {
+	local key="$1" label="$2" owner
+	shift 2
+	{ [ -z "$key" ] || [ "$key" = off ]; } && return 0
+	owner="$(key_owner "$key")"
+	if [ -n "$owner" ] && ! printf '%s' "$owner" | grep -q 'herd'; then
+		CONFLICTS+=("prefix+$key")
+		return 0
+	fi
+	tmux bind-key "$key" "$@"
+	BOUND+=("prefix+$key=$label")
+}
+
+# Drop herd bindings left by older versions on keys herd no longer uses, and
+# give tmux's default back where there was one.
+release_old_key() {
+	local key="$1" owner
+	owner="$(key_owner "$key")"
+	printf '%s' "$owner" | grep -q 'herd' || return 0
+	tmux unbind-key "$key"
+	case "$key" in
+	D) tmux bind-key D choose-client -Z ;;
+	esac
 }
 
 setup_keys() {
-	local herd key bkey dkey skey
+	local herd mkey bkey dkey skey pkey w
 	herd="$(q "$HERD")"
-	key="$(get_opt @herd-picker-key a)"
-	bkey="$(get_opt @herd-blocked-key B)"
-	dkey="$(get_opt @herd-done-key D)"
-	skey="$(get_opt @herd-sidebar-key S)"
-	[ -n "$key" ] && [ "$key" != off ] &&
-		tmux bind-key "$key" display-popup -E -w 90% -h 80% -T ' herd ' "$herd pick --client '#{client_name}'"
-	[ -n "$bkey" ] && [ "$bkey" != off ] &&
-		tmux bind-key "$bkey" run-shell -b "$herd jump blocked --client '#{client_name}'"
-	[ -n "$dkey" ] && [ "$dkey" != off ] &&
-		tmux bind-key "$dkey" run-shell -b "$herd jump done --client '#{client_name}'"
-	[ -n "$skey" ] && [ "$skey" != off ] &&
-		tmux bind-key "$skey" run-shell -b "$herd sidebar --toggle --window '#{window_id}'"
-	return 0
-}
+	mkey="$(get_opt @herd-key a)"
+	bkey="$(get_opt @herd-blocked-key off)"
+	dkey="$(get_opt @herd-done-key off)"
+	skey="$(get_opt @herd-sidebar-key off)"
+	pkey="$(get_opt @herd-picker-key off)"
+	w="$(get_opt @herd-mode-width 32)"
 
-setup_sidebar() {
-	# @herd-sidebar on: keep a sidebar in every window, like a dashboard.
-	local herd w
-	herd="$(q "$HERD")"
-	if is_on "$(get_opt @herd-sidebar off)"; then
-		tmux set-hook -g 'after-new-window[4210]' "run-shell -b \"$herd sidebar --ensure --window #{window_id}\""
-		tmux set-hook -g 'after-new-session[4210]' "run-shell -b \"$herd sidebar --ensure --window #{window_id}\""
-		for w in $(tmux list-windows -a -F '#{window_id}'); do
-			tmux run-shell -b "$herd sidebar --ensure --window $w"
-		done
-	else
-		tmux set-hook -gu 'after-new-window[4210]' 2>/dev/null
-		tmux set-hook -gu 'after-new-session[4210]' 2>/dev/null
+	for k in a B D S; do
+		case " $mkey $bkey $dkey $skey $pkey " in
+		*" $k "*) ;;
+		*) release_old_key "$k" ;;
+		esac
+	done
+
+	bind_herd "$mkey" "herd_mode" display-popup -E -x 0 -y 0 -w "$((w + 2))" -h 100% -T ' herd ' \
+		"$herd mode --client '#{client_name}'"
+	bind_herd "$bkey" "jump_to_blocked" run-shell -b "$herd jump blocked --client '#{client_name}'"
+	bind_herd "$dkey" "jump_to_done" run-shell -b "$herd jump done --client '#{client_name}'"
+	bind_herd "$skey" "toggle_sidebar" run-shell -b "$herd sidebar --toggle --window '#{window_id}'"
+	bind_herd "$pkey" "fzf_picker" display-popup -E -w 90% -h 80% -T ' herd ' "$herd pick --client '#{client_name}'"
+
+	tmux set-option -g @herd_keys "${BOUND[*]}"
+	tmux set-option -g @herd_conflicts "${CONFLICTS[*]}"
+	if [ "${#CONFLICTS[@]}" -gt 0 ]; then
+		tmux display-message -d 8000 \
+			"herd: ${CONFLICTS[*]} already bound, left alone. Pick a key with @herd-key (herd doctor)" 2>/dev/null
 	fi
 	return 0
 }
 
+# --- hooks -------------------------------------------------------------------
 setup_hooks() {
 	local herd
 	herd="$(q "$HERD")"
 	# Fixed array indexes so re-sourcing replaces our hooks, never the user's.
-	tmux set-hook -g 'client-attached[4210]' "run-shell -b \"$herd daemon --ensure\""
+	tmux set-hook -g 'client-attached[4210]' "run-shell -b \"$herd daemon --ensure; $herd _welcome\""
 	tmux set-hook -g 'pane-focus-in[4210]' "run-shell -b \"$herd _focus #{pane_id}\""
 }
 
+# --- status line ---------------------------------------------------------------
+STATUS_SEG='#{?#{@herd_status},#{E:@herd_status} ,}'
+BADGE_SEG='#{?@herd_window_badge,#{E:@herd_window_badge} ,}'
+
+# replace_placeholder OPTION PLACEHOLDER REPLACEMENT — returns 0 if found.
+replace_placeholder() {
+	local v
+	v="$(tmux show-option -gqv "$1")"
+	case "$v" in
+	*"$2"*)
+		tmux set-option -g "$1" "${v//"$2"/$3}"
+		return 0
+		;;
+	esac
+	return 1
+}
+
 setup_status() {
-	local seg='#{E:@herd_status}' sr len
-	if is_on "$(get_opt @herd-status on)"; then
+	local found=0 sr len opt f mode=off
+	# 1. #{herd} where you put it (status-left or status-right).
+	replace_placeholder status-right '#{herd}' "$STATUS_SEG" && found=1
+	replace_placeholder status-left '#{herd}' "$STATUS_SEG" && found=1
+	if [ "$found" = 1 ]; then
+		mode=placeholder
+	elif is_on "$(get_opt @herd-status on)"; then
+		# 2. Default: append to status-right once.
 		sr="$(tmux show-option -gqv status-right)"
 		case "$sr" in
-		*"$seg"*) ;;
-		*) tmux set-option -g status-right "$sr #{?#{@herd_status},$seg ,}" ;;
+		*"@herd_status"*) mode=present ;;
+		*)
+			tmux set-option -g status-right "$sr $STATUS_SEG"
+			len="$(tmux show-option -gqv status-right-length)"
+			[ "${len:-0}" -lt 80 ] && tmux set-option -g status-right-length 80
+			mode=appended
+			;;
 		esac
-		len="$(tmux show-option -gqv status-right-length)"
-		[ "${len:-0}" -lt 100 ] && tmux set-option -g status-right-length 100
 	fi
+	tmux set-option -g @herd_status_mode "$mode"
 
-	local badge='#{?@herd_window_badge,#{E:@herd_window_badge} ,}' f opt
-	if is_on "$(get_opt @herd-window-badge on)"; then
+	found=0
+	for opt in window-status-format window-status-current-format; do
+		replace_placeholder "$opt" '#{herd_badge}' "$BADGE_SEG" && found=1
+	done
+	mode=off
+	if [ "$found" = 1 ]; then
+		mode=placeholder
+	elif is_on "$(get_opt @herd-window-badge on)"; then
+		mode=prefixed
 		for opt in window-status-format window-status-current-format; do
 			f="$(tmux show-option -gqv "$opt")"
 			case "$f" in
 			*"@herd_window_badge"*) ;;
-			*) tmux set-option -g "$opt" "$badge$f" ;;
+			*) tmux set-option -g "$opt" "$BADGE_SEG$f" ;;
 			esac
 		done
 	fi
+	tmux set-option -g @herd_badge_mode "$mode"
 
 	if is_on "$(get_opt @herd-border off)"; then
 		tmux set-option -g pane-border-status top
@@ -105,26 +176,40 @@ setup_status() {
 	fi
 }
 
-start_daemon() {
-	local sock herd
+# --- daemon, sidebars, welcome --------------------------------------------------
+after_binary() {
+	# Runs once the binary is in place.
+	local sock="$1"
+	"$HERD" -S "$sock" daemon --ensure >/dev/null 2>&1 ||
+		tmux display-message "tmux-agent-herd: could not start herdd (see ~/.local/state/herd/herdd.log)"
+	if is_on "$(get_opt @herd-sidebar off)"; then
+		"$HERD" -S "$sock" mode --pin on >/dev/null 2>&1
+	else
+		tmux set-hook -gu 'after-new-window[4210]' 2>/dev/null
+		tmux set-hook -gu 'after-new-session[4210]' 2>/dev/null
+	fi
+	"$HERD" -S "$sock" _welcome >/dev/null 2>&1
+	return 0
+}
+
+start() {
+	local sock
 	sock="$(tmux display-message -p '#{socket_path}')"
-	herd="$(q "$HERD")"
-	if [ -x "$HERD" ] && "$HERD" version >/dev/null 2>&1 &&
-		[ "$("$HERD" version)" = "herd $(cat "$CURRENT_DIR/VERSION" 2>/dev/null)" ]; then
-		"$HERD" -S "$sock" daemon --ensure >/dev/null 2>&1 ||
-			tmux display-message "tmux-agent-herd: could not start herdd (see ~/.local/state/herd/herdd.log)"
+	if [ -x "$HERD" ] && [ "$("$HERD" version 2>/dev/null)" = "herd $(cat "$CURRENT_DIR/VERSION" 2>/dev/null)" ]; then
+		after_binary "$sock"
 	else
 		# First run or plugin update: fetch/build the binary in the background.
-		tmux run-shell -b "$(q "$CURRENT_DIR/scripts/install-binary.sh") && $herd -S $(q "$sock") daemon --ensure || tmux display-message 'tmux-agent-herd: binary install failed; run scripts/install-binary.sh'"
+		tmux run-shell -b "$(q "$CURRENT_DIR/scripts/install-binary.sh") && $(q "$CURRENT_DIR/agent-herd.tmux") --after-binary $(q "$sock") || tmux display-message 'tmux-agent-herd: binary install failed; run scripts/install-binary.sh'"
 	fi
 }
 
-main() {
-	setup_path
-	setup_keys
-	setup_hooks
-	setup_status
-	start_daemon
-	setup_sidebar
-}
-main
+if [ "${1:-}" = "--after-binary" ]; then
+	after_binary "$2"
+	exit 0
+fi
+
+setup_path
+setup_keys
+setup_hooks
+setup_status
+start
