@@ -16,7 +16,7 @@ jobs:
           go-version-file: go.mod
       - name: Tag matches VERSION
         run: test "v$(cat VERSION)" = "$GITHUB_REF_NAME"
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           args: release --clean
